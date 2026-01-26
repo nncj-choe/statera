@@ -80,37 +80,37 @@ METHOD_GUIDES = {
     "기술통계": {
         "title": "📈 기술통계 (Descriptive Statistics)",
         "desc": "연속형 변수의 평균, 표준편차 등을 산출하여 데이터의 전반적인 경향을 파악합니다.",
-        "원인": "해당 없음", "결과": "연속형 변수",
+        "독립": "해당 없음", "종속": "연속형 변수",
         "use": "연구 대상자의 주요 수치형 지표를 요약할 때 사용합니다."
     },
     "빈도분석": {
         "title": "📊 빈도분석 (Frequency Analysis)",
         "desc": "범주형 변수의 빈도와 백분율을 산출하여 대상자의 분포를 확인합니다.",
-        "원인": "해당 없음", "결과": "범주형 변수",
+        "독립": "해당 없음", "종속": "범주형 변수",
         "use": "성별, 학력 등 대상자의 일반적 특성을 보고할 때 사용합니다."
     },
     "T-검정": {
         "title": "👥 T-검정 (T-test)",
         "desc": "집단 간 평균 차이를 비교하여 통계적으로 의미가 있는지 확인합니다.",
-        "원인": "범주형 (2집단)", "결과": "연속형 변수",
+        "독립": "범주형 (2집단)", "종속": "연속형 변수",
         "use": "두 그룹 간의 결과값 차이를 비교하고 싶을 때 사용합니다."
     },
     "분산분석": {
         "title": "🏫 분산분석 (ANOVA)",
         "desc": "세 개 이상의 그룹들 사이에 평균 차이가 존재하는지 확인합니다.",
-        "원인": "범주형 (3집단 이상)", "결과": "연속형 변수",
+        "독립": "범주형 (3집단 이상)", "종속": "연속형 변수",
         "use": "학력이나 연령대별 점수 차이 분석 시 사용합니다."
     },
     "상관분석": {
         "title": "🔗 상관분석 (Correlation Analysis)",
         "desc": "두 연속형 변수가 서로 얼마나 같은 방향 혹은 반대 방향으로 변화하는지 분석합니다.",
-        "원인": "연속형 변수", "결과": "연속형 변수",
+        "독립": "연속형 변수", "종속": "연속형 변수",
         "use": "한 변수가 증가할 때 다른 변수도 같이 변화하는 경향이 있는지 확인 시 사용합니다."
     },
     "회귀분석": {
         "title": "🎯 회귀분석 (Regression Analysis)",
-        "desc": "원인이 되는 변수가 결과에 어느 정도의 영향력을 미치는지 예측합니다.",
-        "원인": "연속형 또는 범주형", "결과": "연속형(선형) 또는 이분 범주형(로지스틱)",
+        "desc": "독립변수가 종속변수에 어느 정도의 영향력을 미치는지 예측합니다.",
+        "독립": "연속형 또는 범주형", "종속": "연속형(선형) 또는 이분 범주형(로지스틱)",
         "use": "특정 요인이 결과에 미치는 영향의 크기를 수치화할 때 사용합니다."
     }
 }
@@ -134,7 +134,7 @@ def format_p(p): return "<.001" if p < .001 else f"{p:.3f}"
 
 def get_auto_interpretation(method, p_val, r_val=None, t_type=None):
     is_sig = p_val < 0.05
-    sig_text = "통계적으로 유의미한 것으로 나타났습니다(p < .05)." if is_sig else "통계적으로 유의미하지 않은 것으로 나타났습니다(p >= .05)."
+    sig_text = "통계적으로 유의한 것으로 나타났습니다(p < .05)." if is_sig else "통계적으로 유의하지 않은 것으로 나타났습니다(p >= .05)."
     
     if method == "T-검정":
         prefix = f"{t_type} T-검정 결과, "
@@ -148,7 +148,7 @@ def get_auto_interpretation(method, p_val, r_val=None, t_type=None):
         direction = "양(+)의 관계" if r_val > 0 else "음(-)의 관계"
         return f"상관분석 결과, 두 변수 간의 {direction}는 {sig_text}"
     elif method == "회귀분석":
-        return f"회귀분석 결과, 설정된 원인 변수가 결과 변수에 미치는 영향은 {sig_text}"
+        return f"회귀분석 결과, 설정된 독립 변수가 종속속 변수에 미치는 영향은 {sig_text}"
     return f"분석 결과 p값이 {format_p(p_val)}로 산출되었습니다."
 
 def get_plot_buffer():
@@ -193,7 +193,7 @@ if up_file:
         <div class="method-title">{guide['title']}</div>
         <div class="method-desc">
             {guide['desc']}<br>
-            <span class="var-badge">원인 변수</span> {guide['원인']} &nbsp; <span class="var-badge">결과 변수</span> {guide['결과']}<br>
+            <span class="var-badge">독립 변수</span> {guide['독립']} &nbsp; <span class="var-badge">종속 변수</span> {guide['종속']}<br>
             <b>활용 예시:</b> {guide['use']}
         </div>
     </div>
@@ -233,7 +233,7 @@ if up_file:
         st.markdown(f'<div class="sub-method-info">💡 {TTEST_SUB_GUIDES[t_mode]}</div>', unsafe_allow_html=True)
         
         if t_mode == "독립표본":
-            g, y = st.selectbox("집단 변수 (범주형)", all_cols), st.selectbox("결과 변수 (연속형)", num_cols)
+            g, y = st.selectbox("집단 변수 (범주형)", all_cols), st.selectbox("결과과 변수 (연속형)", num_cols)
             if st.button("분석 실행"):
                 gps = df[g].unique()
                 g1, g2 = df[df[g]==gps[0]][y].dropna(), df[df[g]==gps[1]][y].dropna()
@@ -280,7 +280,7 @@ if up_file:
     # 6) 회귀분석
     elif method == "회귀분석":
         reg_t = st.radio("유형", ["선형 회귀 (결과가 수치일 때)", "로지스틱 회귀 (결과가 발생여부일 때)"], horizontal=True)
-        x_vars, y_var = st.multiselect("원인 변수 선택", num_cols), st.selectbox("결과 변수 선택", num_cols)
+        x_vars, y_var = st.multiselect("독립 변수 선택", num_cols), st.selectbox("종속 변수 선택", num_cols)
         if st.button("분석 실행") and x_vars:
             X = sm.add_constant(df[x_vars])
             if "선형" in reg_t:
@@ -315,7 +315,7 @@ st.markdown(f"""
     <div class="ethics-text">
         1. 본 서비스에서 제공하는 자동 해석 문구는 유의수준 0.05를 기준으로 산출된 기계적 판정 결과입니다.<br>
         2. 연구자는 통계적 유의성(p-value)뿐만 아니라, 연구 목적에 따른 실질적/임상적 의미를 반드시 함께 고려해야 합니다.<br>
-        3. 분석 알고리즘의 타당도는 지속적으로 검증 중이며, 최종 보고서 작성 시 본 해석의 정확성을 검토할 책임은 연구자 본인에게 있습니다.<br>
+        3. 최종 보고서 작성 시 본 해석의 정확성을 검토할 책임은 연구자 본인에게 있습니다.<br>
         4. 데이터의 정규성, 등분산성 등 통계적 기본 가정이 충족되었는지 사전에 확인하시기 바랍니다.
     </div>
 </div>
