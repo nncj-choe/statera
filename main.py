@@ -311,7 +311,7 @@ else:
 # -----------------------------------------------------------------------------
 st.markdown(f"""
 <div class="ethics-container">
-    <div class="ethics-title">⚠️ 분석 결과 해석 시 유의사항 (Researcher Ethics)</div>
+    <div class="ethics-title">⚠️ 분석 결과 해석 시 유의사항</div>
     <div class="ethics-text">
         1. 본 서비스에서 제공하는 자동 해석 문구는 유의수준 0.05를 기준으로 산출된 기계적 판정 결과입니다.<br>
         2. 연구자는 통계적 유의성(p-value)뿐만 아니라, 연구 목적에 따른 실질적/임상적 의미를 반드시 함께 고려해야 합니다.<br>
@@ -321,4 +321,4 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("<div style='text-align: center; color: #cbd5e1; margin-top: 20px; font-size: 0.8rem;'>Professional Statistical Engine | ANDA Lab Jeongin Choe</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; color: #cbd5e1; margin-top: 20px; font-size: 0.8rem;'>STATistical Engine for Research & Analysis | ANDA Lab Jeongin Choe</div>", unsafe_allow_html=True)
