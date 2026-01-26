@@ -148,7 +148,7 @@ def get_auto_interpretation(method, p_val, r_val=None, t_type=None):
         direction = "양(+)의 관계" if r_val > 0 else "음(-)의 관계"
         return f"상관분석 결과, 두 변수 간의 {direction}는 {sig_text}"
     elif method == "회귀분석":
-        return f"회귀분석 결과, 설정된 독립 변수가 종속속 변수에 미치는 영향은 {sig_text}"
+        return f"회귀분석 결과, 설정된 독립 변수가 종속 변수에 미치는 영향은 {sig_text}"
     return f"분석 결과 p값이 {format_p(p_val)}로 산출되었습니다."
 
 def get_plot_buffer():
