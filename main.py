@@ -235,7 +235,7 @@ else:
     <div class="landing-zone">
         <div style="font-size: 3.5rem; margin-bottom: 20px;">⬆️</div>
         <h3 style="color: #0f172a; margin-bottom: 10px;">분석을 시작하려면 파일을 업로드하세요</h3>
-        <p style="color: #64748b;">파일이 로드되면 전문 통계 가이드와 분석 옵션이 활성화됩니다.</p>
+        <p style="color: #64748b;">파일이 업로드되면 전문 통계 가이드와 분석 옵션이 활성화됩니다.</p>
     </div>
     """, unsafe_allow_html=True)
 
