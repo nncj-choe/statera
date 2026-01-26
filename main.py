@@ -304,4 +304,4 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-st.markdown("<div style='text-align: center; color: #cbd5e1; margin-top: 100px; font-size: 0.8rem;'>Professional Statistical Engine | ANDA Lab Jeong인 Choe</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; color: #cbd5e1; margin-top: 100px; font-size: 0.8rem;'>Professional Statistical Engine | ANDA Lab Jeongin Choe</div>", unsafe_allow_html=True)
