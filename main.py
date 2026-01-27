@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 import statsmodels.api as sm
+from statsmodels.formula.api import ols
+from statsmodels.stats.anova import anova_lm
 import io
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -10,7 +12,7 @@ from docx import Document
 from docx.shared import Inches
 
 # -----------------------------------------------------------------------------
-# 1. UI 스타일링 및 프리미엄 테마 설정 (Pretendard 적용)
+# 1. UI 스타일링 및 테마 설정 
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="STATERA", page_icon="📊", layout="wide")
 
@@ -79,37 +81,37 @@ with st.sidebar:
 METHOD_GUIDES = {
     "기술통계": {
         "title": "📈 기술통계 (Descriptive Statistics)",
-        "desc": "연속형 변수의 평균, 표준편차 등을 산출하여 데이터의 전반적인 경향을 파악합니다.",
+        "desc": "연속형 변수의 평균, 표준편차, 왜도, 첨도 등을 산출하여 데이터의 전반적인 경향을 파악합니다.",
         "독립": "해당 없음", "종속": "연속형 변수",
         "use": "연구 대상자의 주요 수치형 지표를 요약할 때 사용합니다."
     },
     "빈도분석": {
         "title": "📊 빈도분석 (Frequency Analysis)",
-        "desc": "범주형 변수의 빈도와 백분율을 산출하여 대상자의 분포를 확인합니다.",
+        "desc": "범주형 변수의 빈도, 백분율, 누적 비율을 산출하여 대상자의 분포를 확인합니다.",
         "독립": "해당 없음", "종속": "범주형 변수",
         "use": "성별, 학력 등 대상자의 일반적 특성을 보고할 때 사용합니다."
     },
     "T-검정": {
         "title": "👥 T-검정 (T-test)",
-        "desc": "집단 간 평균 차이를 비교하여 통계적으로 의미가 있는지 확인합니다.",
+        "desc": "집단 간 평균 차이, 95% 신뢰구간, 효과크기(Cohen's d)를 분석합니다.",
         "독립": "범주형 (2집단)", "종속": "연속형 변수",
         "use": "두 그룹 간의 결과값 차이를 비교하고 싶을 때 사용합니다."
     },
     "분산분석": {
         "title": "🏫 분산분석 (ANOVA)",
-        "desc": "세 개 이상의 그룹들 사이에 평균 차이가 존재하는지 확인합니다.",
+        "desc": "세 개 이상의 그룹 간 평균 차이와 효과크기(Eta-squared)를 분석합니다.",
         "독립": "범주형 (3집단 이상)", "종속": "연속형 변수",
         "use": "학력이나 연령대별 점수 차이 분석 시 사용합니다."
     },
     "상관분석": {
         "title": "🔗 상관분석 (Correlation Analysis)",
-        "desc": "두 연속형 변수가 서로 얼마나 같은 방향 혹은 반대 방향으로 변화하는지 분석합니다.",
+        "desc": "두 연속형 변수 간의 관계성(r)과 95% 신뢰구간을 분석합니다.",
         "독립": "연속형 변수", "종속": "연속형 변수",
         "use": "한 변수가 증가할 때 다른 변수도 같이 변화하는 경향이 있는지 확인 시 사용합니다."
     },
     "회귀분석": {
         "title": "🎯 회귀분석 (Regression Analysis)",
-        "desc": "독립변수가 종속변수에 어느 정도의 영향력을 미치는지 예측합니다.",
+        "desc": "독립변수의 영향력, 모형 적합도(R²), 계수의 신뢰구간을 산출합니다.",
         "독립": "연속형 또는 범주형", "종속": "연속형(선형) 또는 이분 범주형(로지스틱)",
         "use": "특정 요인이 결과에 미치는 영향의 크기를 수치화할 때 사용합니다."
     }
@@ -122,7 +124,7 @@ TTEST_SUB_GUIDES = {
 }
 
 # -----------------------------------------------------------------------------
-# 4. 유틸리티 및 해석 엔진
+# 4. 유틸리티 및 스마트 해석 엔진
 # -----------------------------------------------------------------------------
 def get_stars(p):
     if p < .001: return "***"
@@ -132,24 +134,94 @@ def get_stars(p):
 
 def format_p(p): return "<.001" if p < .001 else f"{p:.3f}"
 
-def get_auto_interpretation(method, p_val, r_val=None, t_type=None):
-    is_sig = p_val < 0.05
-    sig_text = "통계적으로 유의한 것으로 나타났습니다(p < .05)." if is_sig else "통계적으로 유의하지 않은 것으로 나타났습니다(p >= .05)."
+def calc_cohens_d(x1, x2):
+    """T-test용 효과크기(Cohen's d) 계산"""
+    nx1, nx2 = len(x1), len(x2)
+    s1, s2 = np.std(x1, ddof=1), np.std(x2, ddof=1)
+    # Pooled Standard Deviation
+    s_pooled = np.sqrt(((nx1 - 1) * s1**2 + (nx2 - 1) * s2**2) / (nx1 + nx2 - 2))
+    return (np.mean(x1) - np.mean(x2)) / s_pooled
+
+def calc_corr_ci(r, n, alpha=0.05):
+    """상관계수의 95% 신뢰구간 계산 (Fisher's z transformation)"""
+    if n <= 3: return np.nan, np.nan
+    z = np.arctanh(r)
+    se = 1 / np.sqrt(n - 3)
+    z_crit = stats.norm.ppf(1 - alpha/2)
+    lo_z, hi_z = z - z_crit * se, z + z_crit * se
+    return np.tanh(lo_z), np.tanh(hi_z)
+
+# --- 해석 가이드 생성 함수 ---
+def interpret_effect_size(val, method):
+    """효과크기의 강도를 문자로 변환"""
+    abs_val = abs(val)
+    if method == "cohen_d":
+        if abs_val < 0.2: return "작은(Small)"
+        elif abs_val < 0.5: return "중간(Medium)"
+        else: return "큰(Large)"
+    elif method == "eta_sq": # Eta-squared
+        if abs_val < 0.01: return "미미한"
+        elif abs_val < 0.06: return "작은(Small)"
+        elif abs_val < 0.14: return "중간(Medium)"
+        else: return "큰(Large)"
+    elif method == "pearson_r":
+        if abs_val < 0.3: return "약한"
+        elif abs_val < 0.7: return "뚜렷한"
+        else: return "강한"
+    return ""
+
+def get_auto_interpretation(method, p_val, stats_dict=None):
+    """통계 결과에 대한 종합적인 학술적 해석 문장 생성"""
+    if stats_dict is None: stats_dict = {}
     
-    if method == "T-검정":
-        prefix = f"{t_type} T-검정 결과, "
-        if t_type == "독립표본": body = f"두 집단 간의 평균 차이는 {sig_text}"
-        elif t_type == "대응표본": body = f"사전과 사후의 평균 변화는 {sig_text}"
-        else: body = f"집단의 평균과 기준값 사이의 차이는 {sig_text}"
-        return prefix + body
+    # 1. 유의성 판단
+    is_sig = p_val < 0.05
+    sig_text = "통계적으로 유의한 차이(또는 관계)가 확인되었습니다(p < .05)." if is_sig else "통계적으로 유의한 차이(또는 관계)가 확인되지 않았습니다(p >= .05)."
+    
+    explanation = f"📌 **[1. 유의성 판단]** {sig_text}\n\n"
+    
+    # 2. 분석 기법별 상세 해석 가이드
+    if method == "기술통계":
+        skew, kurt = stats_dict.get('skew', 0), stats_dict.get('kurt', 0)
+        normality = "만족하는 것으로 보입니다" if (abs(skew) < 2 and abs(kurt) < 7) else "벗어날 가능성이 있어 주의가 필요합니다"
+        explanation = f"📌 **[데이터 분포 해석]**\n데이터의 왜도({skew:.2f})와 첨도({kurt:.2f})를 기준으로 볼 때, 정규성 가정을 {normality}."
+
+    elif method == "빈도분석":
+        explanation = "📌 **[해석 가이드]**\n'비율(%)'은 전체 대비 해당 범주의 크기를, '누적 비율'은 순차적으로 합산된 비중을 의미합니다. 데이터가 특정 범주에 편중되어 있는지 확인하십시오."
+
+    elif method == "T-검정":
+        d_val = stats_dict.get('d', 0)
+        ci_lo, ci_hi = stats_dict.get('ci_lo', 0), stats_dict.get('ci_hi', 0)
+        d_desc = interpret_effect_size(d_val, "cohen_d")
+        
+        explanation += f"📌 **[2. 효과크기 및 신뢰구간]**\n"
+        explanation += f"- **Cohen's d = {d_val:.2f}:** 두 집단 간에는 **'{d_desc}' 수준의 실질적 차이**가 존재합니다.\n"
+        explanation += f"- **95% 신뢰구간 [{ci_lo:.2f}, {ci_hi:.2f}]:** 반복 연구 시, 실제 평균 차이는 이 범위 내에 존재할 확률이 95%입니다. (구간에 0이 포함되지 않아야 유의합니다.)"
+
     elif method == "분산분석":
-        return f"일원배치 분산분석(ANOVA) 결과, 설정된 집단들 간의 평균 차이는 {sig_text}"
+        eta = stats_dict.get('eta', 0)
+        eta_desc = interpret_effect_size(eta, "eta_sq")
+        
+        explanation += f"📌 **[2. 효과크기 해석]**\n"
+        explanation += f"- **Eta-squared ($\eta^2$) = {eta:.3f}:** 독립 변수(집단 구분)가 종속 변수의 변동을 약 **{eta*100:.1f}%** 설명하고 있으며, 이는 **'{eta_desc}' 수준의 설명력**입니다."
+
     elif method == "상관분석":
-        direction = "양(+)의 관계" if r_val > 0 else "음(-)의 관계"
-        return f"상관분석 결과, 두 변수 간의 {direction}는 {sig_text}"
+        r_val = stats_dict.get('r', 0)
+        r_desc = interpret_effect_size(r_val, "pearson_r")
+        direction = "양(+)" if r_val > 0 else "음(-)"
+        
+        explanation += f"📌 **[2. 상관관계 해석]**\n"
+        explanation += f"- **상관계수(r) = {r_val:.2f}:** 두 변수는 **{direction}의 방향으로 {r_desc} 선형 관계**를 보입니다.\n"
+        explanation += "- 95% 신뢰구간이 0을 포함하지 않는지 확인하십시오."
+
     elif method == "회귀분석":
-        return f"회귀분석 결과, 설정된 독립 변수가 종속 변수에 미치는 영향은 {sig_text}"
-    return f"분석 결과 p값이 {format_p(p_val)}로 산출되었습니다."
+        r2 = stats_dict.get('r2', 0)
+        
+        explanation += f"📌 **[2. 모형 적합도 해석]**\n"
+        explanation += f"- **결정계수($R^2$) = {r2:.3f}:** 구축된 회귀 모형은 종속 변수 전체 변동의 약 **{r2*100:.1f}%**를 설명하고 있습니다.\n"
+        explanation += "- 각 독립 변수의 **B(비표준화 계수)** 신뢰구간이 0을 포함하지 않을 때, 해당 변수는 유의한 영향력이 있다고 판단합니다."
+
+    return explanation
 
 def get_plot_buffer():
     buf = io.BytesIO(); plt.savefig(buf, format='png', bbox_inches='tight', dpi=300); buf.seek(0); plt.close(); return buf
@@ -203,16 +275,28 @@ if up_file:
     all_cols = df.columns
     final_df, interpretation, plot_img = None, "", None
 
-    # 1) 기술통계
+    # -------------------------------------------------------------------------
+    # 1) 기술통계 (보강: 중위수, 왜도, 첨도 + 해석)
+    # -------------------------------------------------------------------------
     if method == "기술통계":
         sel_v = st.multiselect("분석할 연속형 변수를 선택하세요", num_cols)
         if st.button("분석 실행") and sel_v:
-            final_df = df[sel_v].describe().T[['count', 'mean', 'std', 'min', 'max']].reset_index()
-            final_df.columns = ['변수명', 'N (사례 수)', '평균', '표준편차', '최솟값', '최댓값']
-            interpretation = "선택된 변수들의 분포와 중심 경향성에 관한 분석 결과입니다."
+            desc = df[sel_v].describe().T
+            desc['skew'] = df[sel_v].skew()
+            desc['kurt'] = df[sel_v].kurt()
+            
+            final_df = desc[['count', 'mean', 'std', 'min', '50%', 'max', 'skew', 'kurt']].reset_index()
+            final_df.columns = ['변수명', 'N', '평균(M)', '표준편차(SD)', '최솟값', '중위수(Median)', '최댓값', '왜도', '첨도']
+            
+            # 해석용 딕셔너리 생성 (첫 번째 변수 기준 예시)
+            stats_info = {'skew': desc['skew'].iloc[0], 'kurt': desc['kurt'].iloc[0]}
+            interpretation = get_auto_interpretation("기술통계", 1.0, stats_dict=stats_info) # p-value 의미 없음
+            
             plt.figure(figsize=(10, 5)); sns.boxplot(data=df[sel_v], palette="Set2"); plot_img = get_plot_buffer()
 
-    # 2) 빈도분석
+    # -------------------------------------------------------------------------
+    # 2) 빈도분석 (보강: 누적 비율 + 해석)
+    # -------------------------------------------------------------------------
     elif method == "빈도분석":
         sel_v = st.multiselect("분석할 범주형 변수를 선택하세요", all_cols)
         if st.button("분석 실행") and sel_v:
@@ -220,77 +304,241 @@ if up_file:
             for col in sel_v:
                 c = df[col].value_counts().reset_index()
                 c.columns = ['범주', '빈도(N)']
-                c['비율(%)'] = (c['빈도(N)'] / c['빈도(N)'].sum() * 100).round(1)
+                total = c['빈도(N)'].sum()
+                c['비율(%)'] = (c['빈도(N)'] / total * 100).round(1)
+                c['누적 비율(%)'] = c['비율(%)'].cumsum()
                 c.insert(0, '변수명', col)
                 res_list.append(c)
             final_df = pd.concat(res_list)
-            interpretation = "각 범주별 빈도와 상대적 비중을 확인하기 위한 분석 결과입니다."
+            interpretation = get_auto_interpretation("빈도분석", 1.0)
             plt.figure(figsize=(10, 5)); sns.countplot(x=sel_v[0], data=df, palette="pastel"); plot_img = get_plot_buffer()
 
-    # 3) T-검정 (모든 유형 포함)
+    # -------------------------------------------------------------------------
+    # 3) T-검정 (대폭 보강: CI, Mean Diff, SE, Effect Size + 해석)
+    # -------------------------------------------------------------------------
     elif method == "T-검정":
         t_mode = st.radio("세부 유형 선택", list(TTEST_SUB_GUIDES.keys()), horizontal=True)
         st.markdown(f'<div class="sub-method-info">💡 {TTEST_SUB_GUIDES[t_mode]}</div>', unsafe_allow_html=True)
         
         if t_mode == "독립표본":
-            g, y = st.selectbox("집단 변수 (범주형)", all_cols), st.selectbox("결과과 변수 (연속형)", num_cols)
+            g, y = st.selectbox("집단 변수 (범주형)", all_cols), st.selectbox("결과 변수 (연속형)", num_cols)
             if st.button("분석 실행"):
                 gps = df[g].unique()
-                g1, g2 = df[df[g]==gps[0]][y].dropna(), df[df[g]==gps[1]][y].dropna()
-                t_stat, p = stats.ttest_ind(g1, g2, equal_var=stats.levene(g1, g2).pvalue > .05)
-                final_df = pd.DataFrame({"변수명": [y], "t값": [f"{t_stat:.2f}"], "p값": [f"{format_p(p)}{get_stars(p)}"]})
-                interpretation = get_auto_interpretation("T-검정", p, t_type="독립표본")
-                plt.figure(figsize=(6, 5)); sns.barplot(x=g, y=y, data=df, palette="mako"); plot_img = get_plot_buffer()
+                if len(gps) != 2:
+                    st.error("독립표본 T-검정은 집단이 정확히 2개여야 합니다.")
+                else:
+                    g1 = df[df[g]==gps[0]][y].dropna()
+                    g2 = df[df[g]==gps[1]][y].dropna()
+                    
+                    # Levene 등분산 검정
+                    levene_p = stats.levene(g1, g2).pvalue
+                    equal_var = levene_p > 0.05
+                    
+                    # T-test
+                    t_stat, p = stats.ttest_ind(g1, g2, equal_var=equal_var)
+                    
+                    # 통계량 계산
+                    mean_diff = np.mean(g1) - np.mean(g2)
+                    n1, n2 = len(g1), len(g2)
+                    se_diff = np.sqrt(np.var(g1, ddof=1)/n1 + np.var(g2, ddof=1)/n2)
+                    
+                    # 95% CI
+                    df_t = n1 + n2 - 2
+                    ci_crit = stats.t.ppf(0.975, df_t)
+                    ci_lower = mean_diff - ci_crit * se_diff
+                    ci_upper = mean_diff + ci_crit * se_diff
+                    d_val = calc_cohens_d(g1, g2)
+
+                    final_df = pd.DataFrame({
+                        "변수명": [y],
+                        "집단비교": [f"{gps[0]} vs {gps[1]}"],
+                        "평균 차이": [f"{mean_diff:.2f}"],
+                        "표준오차(SE)": [f"{se_diff:.2f}"],
+                        "95% CI (Lower)": [f"{ci_lower:.2f}"],
+                        "95% CI (Upper)": [f"{ci_upper:.2f}"],
+                        "t값": [f"{t_stat:.2f}"],
+                        "df": [f"{df_t}"],
+                        "p값": [f"{format_p(p)}{get_stars(p)}"],
+                        "Cohen's d": [f"{d_val:.2f}"]
+                    })
+                    
+                    stats_info = {'d': d_val, 'ci_lo': ci_lower, 'ci_hi': ci_upper}
+                    interpretation = get_auto_interpretation("T-검정", p, stats_dict=stats_info)
+                    if not equal_var: interpretation += "\n(참고: 등분산이 가정되지 않아 Welch's T-test를 수행했습니다.)"
+                    
+                    plt.figure(figsize=(6, 5)); sns.barplot(x=g, y=y, data=df, palette="mako"); plot_img = get_plot_buffer()
         
         elif t_mode == "대응표본":
             v1, v2 = st.selectbox("사전 변수 (연속형)", num_cols), st.selectbox("사후 변수 (연속형)", num_cols)
             if st.button("분석 실행"):
-                t_stat, p = stats.ttest_rel(df[v1].dropna(), df[v2].dropna())
-                final_df = pd.DataFrame({"비교": [f"{v1} vs {v2}"], "t값": [f"{t_stat:.2f}"], "p값": [f"{format_p(p)}{get_stars(p)}"]})
-                interpretation = get_auto_interpretation("T-검정", p, t_type="대응표본")
-                plt.figure(figsize=(6, 5)); sns.pointplot(data=df[[v1, v2]], palette="flare"); plot_img = get_plot_buffer()
-        
+                pair_data = df[[v1, v2]].dropna()
+                diff = pair_data[v1] - pair_data[v2]
+                
+                t_stat, p = stats.ttest_rel(pair_data[v1], pair_data[v2])
+                
+                mean_diff = np.mean(diff)
+                se_diff = stats.sem(diff)
+                df_t = len(diff) - 1
+                ci = stats.t.interval(0.95, df_t, loc=mean_diff, scale=se_diff)
+                d_val = mean_diff / np.std(diff, ddof=1) 
+
+                final_df = pd.DataFrame({
+                    "비교": [f"{v1} - {v2}"],
+                    "평균 차이": [f"{mean_diff:.2f}"],
+                    "표준오차(SE)": [f"{se_diff:.2f}"],
+                    "95% CI (Lower)": [f"{ci[0]:.2f}"],
+                    "95% CI (Upper)": [f"{ci[1]:.2f}"],
+                    "t값": [f"{t_stat:.2f}"],
+                    "p값": [f"{format_p(p)}{get_stars(p)}"],
+                    "Cohen's d": [f"{d_val:.2f}"]
+                })
+                
+                stats_info = {'d': d_val, 'ci_lo': ci[0], 'ci_hi': ci[1]}
+                interpretation = get_auto_interpretation("T-검정", p, stats_dict=stats_info)
+                plt.figure(figsize=(6, 5)); sns.pointplot(data=pair_data, palette="flare"); plot_img = get_plot_buffer()
+
         elif t_mode == "단일표본":
             v, mu = st.selectbox("분석 변수 (연속형)", num_cols), st.number_input("검정 기준값", value=0.0)
             if st.button("분석 실행"):
-                t_stat, p = stats.ttest_1samp(df[v].dropna(), mu)
-                final_df = pd.DataFrame({"변수명": [v], "t값": [f"{t_stat:.2f}"], "p값": [f"{format_p(p)}{get_stars(p)}"]})
-                interpretation = get_auto_interpretation("T-검정", p, t_type="단일표본")
-                plt.figure(figsize=(6, 5)); sns.histplot(df[v], kde=True); plt.axvline(mu, color='red', ls='--'); plot_img = get_plot_buffer()
+                clean_data = df[v].dropna()
+                t_stat, p = stats.ttest_1samp(clean_data, mu)
+                
+                mean_val = np.mean(clean_data)
+                mean_diff = mean_val - mu
+                se = stats.sem(clean_data)
+                ci = stats.t.interval(0.95, len(clean_data)-1, loc=mean_val, scale=se)
 
-    # 4) 분산분석
+                final_df = pd.DataFrame({
+                    "변수": [v],
+                    "표본 평균": [f"{mean_val:.2f}"],
+                    "차이(Mean-μ)": [f"{mean_diff:.2f}"],
+                    "95% CI (Lower)": [f"{ci[0]:.2f}"],
+                    "95% CI (Upper)": [f"{ci[1]:.2f}"],
+                    "t값": [f"{t_stat:.2f}"],
+                    "p값": [f"{format_p(p)}{get_stars(p)}"]
+                })
+                # 단일표본은 Cohen's d 생략 (해석 엔진에서 예외 처리됨)
+                interpretation = get_auto_interpretation("T-검정", p)
+                plt.figure(figsize=(6, 5)); sns.histplot(clean_data, kde=True); plt.axvline(mu, color='red', ls='--'); plot_img = get_plot_buffer()
+
+    # -------------------------------------------------------------------------
+    # 4) 분산분석 (보강: Eta-squared, 자유도 + 해석)
+    # -------------------------------------------------------------------------
     elif method == "분산분석":
-        g, y = st.selectbox("집단 변수 (3집단 이상 범주형)", all_cols), st.selectbox("결과 변수 (연속형)", num_cols)
+        g, y = st.selectbox("집단 변수 (3집단 이상)", all_cols), st.selectbox("결과 변수 (연속형)", num_cols)
         if st.button("분석 실행"):
-            groups = [df[df[g]==val][y].dropna() for val in df[g].unique()]
-            f_val, p = stats.f_oneway(*groups)
-            final_df = pd.DataFrame({"변수명": [y], "F값": [f"{f_val:.2f}"], "p값": [f"{format_p(p)}{get_stars(p)}"]})
-            interpretation = get_auto_interpretation("분산분석", p)
+            temp_df = df[[g, y]].dropna().rename(columns={g:'Group_Var', y:'Target_Var'})
+            
+            model = ols('Target_Var ~ C(Group_Var)', data=temp_df).fit()
+            anova_table = anova_lm(model, typ=2)
+            
+            ss_between = anova_table.loc['C(Group_Var)', 'sum_sq']
+            ss_resid = anova_table.loc['Residual', 'sum_sq']
+            eta_sq = ss_between / (ss_between + ss_resid)
+            
+            f_val = anova_table.loc['C(Group_Var)', 'F']
+            p_val = anova_table.loc['C(Group_Var)', 'PR(>F)']
+            df_bet = int(anova_table.loc['C(Group_Var)', 'df'])
+            df_resid = int(anova_table.loc['Residual', 'df'])
+
+            final_df = pd.DataFrame({
+                "요인": ["집단 간", "집단 내(오차)"],
+                "제곱합(SS)": [f"{ss_between:.2f}", f"{ss_resid:.2f}"],
+                "자유도(df)": [df_bet, df_resid],
+                "평균제곱(MS)": [f"{ss_between/df_bet:.2f}", f"{ss_resid/df_resid:.2f}"],
+                "F값": [f"{f_val:.2f}", ""],
+                "p값": [f"{format_p(p_val)}{get_stars(p_val)}", ""],
+                "Eta-squared": [f"{eta_sq:.3f}", ""]
+            })
+            
+            stats_info = {'eta': eta_sq}
+            interpretation = get_auto_interpretation("분산분석", p_val, stats_dict=stats_info)
             plt.figure(figsize=(8, 5)); sns.boxplot(x=g, y=y, data=df, palette="viridis"); plot_img = get_plot_buffer()
 
-    # 5) 상관분석
+    # -------------------------------------------------------------------------
+    # 5) 상관분석 (보강: CI + 해석)
+    # -------------------------------------------------------------------------
     elif method == "상관분석":
         v1, v2 = st.selectbox("변수 1 (연속형)", num_cols), st.selectbox("변수 2 (연속형)", num_cols)
         if st.button("분석 실행"):
-            r, p = stats.pearsonr(df[v1].dropna(), df[v2].dropna())
-            final_df = pd.DataFrame({"분석 변수": [f"{v1} & {v2}"], "상관계수(r)": [f"{r:.2f}"], "p값": [f"{format_p(p)}{get_stars(p)}"]})
-            interpretation = get_auto_interpretation("상관분석", p, r_val=r)
+            clean_df = df[[v1, v2]].dropna()
+            r, p = stats.pearsonr(clean_df[v1], clean_df[v2])
+            n = len(clean_df)
+            
+            ci_lo, ci_hi = calc_corr_ci(r, n)
+
+            final_df = pd.DataFrame({
+                "변수 관계": [f"{v1} & {v2}"],
+                "N": [n],
+                "상관계수(r)": [f"{r:.2f}"],
+                "95% CI (Lower)": [f"{ci_lo:.2f}"],
+                "95% CI (Upper)": [f"{ci_hi:.2f}"],
+                "p값": [f"{format_p(p)}{get_stars(p)}"]
+            })
+            
+            stats_info = {'r': r}
+            interpretation = get_auto_interpretation("상관분석", p, stats_dict=stats_info)
             plt.figure(figsize=(7, 5)); sns.regplot(x=v1, y=v2, data=df, line_kws={'color':'#0d9488'}); plot_img = get_plot_buffer()
 
-    # 6) 회귀분석
+    # -------------------------------------------------------------------------
+    # 6) 회귀분석 (보강: R-squared, F값, 모형 적합도 + 해석)
+    # -------------------------------------------------------------------------
     elif method == "회귀분석":
         reg_t = st.radio("유형", ["선형 회귀 (결과가 수치일 때)", "로지스틱 회귀 (결과가 발생여부일 때)"], horizontal=True)
-        x_vars, y_var = st.multiselect("독립 변수 선택", num_cols), st.selectbox("종속 변수 선택", num_cols)
+        x_vars = st.multiselect("독립 변수 선택", [c for c in num_cols])
+        y_var = st.selectbox("종속 변수 선택", num_cols)
+        
         if st.button("분석 실행") and x_vars:
-            X = sm.add_constant(df[x_vars])
+            X = sm.add_constant(df[x_vars].dropna())
+            Y = df[y_var].loc[X.index] 
+
             if "선형" in reg_t:
-                model = sm.OLS(df[y_var], X).fit(); p_val = model.f_pvalue
-                final_df = pd.DataFrame({"B (계수)": model.params, "표준오차": model.bse, "t값": model.tvalues, "p값": model.pvalues}).reset_index()
-            else:
-                model = sm.Logit(df[y_var], X).fit(disp=0); p_val = model.llr_pvalue; conf = model.conf_int()
-                final_df = pd.DataFrame({"B": model.params, "OR (오즈비)": np.exp(model.params), "Lower CI": np.exp(conf[0]), "Upper CI": np.exp(conf[1]), "p": model.pvalues}).reset_index()
-            interpretation = get_auto_interpretation("회귀분석", p_val); plt.figure(figsize=(8, 4)); sns.heatmap(df[x_vars + [y_var]].corr(), annot=True, cmap="YlGnBu"); plot_img = get_plot_buffer()
-            final_df['p값'] = final_df.iloc[:, -1].apply(lambda x: f"{format_p(x)}{get_stars(x)}")
+                model = sm.OLS(Y, X).fit()
+                
+                st.info(f"📐 모형 적합도: R² = {model.rsquared:.3f}, Adj. R² = {model.rsquared_adj:.3f}, F({model.df_model:.0f}, {model.df_resid:.0f}) = {model.fvalue:.2f}, p = {format_p(model.f_pvalue)}")
+                
+                conf_int = model.conf_int(alpha=0.05)
+                conf_int.columns = ['Lower CI', 'Upper CI']
+                
+                final_df = pd.DataFrame({
+                    "B (비표준화 계수)": model.params,
+                    "표준오차(SE)": model.bse,
+                    "Beta (표준화 계수)": "N/A", 
+                    "t값": model.tvalues,
+                    "p값": model.pvalues,
+                    "95% CI (Lower)": conf_int['Lower CI'],
+                    "95% CI (Upper)": conf_int['Upper CI']
+                }).reset_index().rename(columns={'index':'변수명'})
+                
+                p_val_model = model.f_pvalue
+                stats_info = {'r2': model.rsquared}
+                
+            else: 
+                model = sm.Logit(Y, X).fit(disp=0)
+                st.info(f"📐 모형 적합도: Pseudo R² = {model.prsquared:.3f}, LLR p-value = {format_p(model.llr_pvalue)}")
+                
+                conf_int = model.conf_int()
+                odds_ratio = np.exp(model.params)
+                or_ci_lower = np.exp(conf_int[0])
+                or_ci_upper = np.exp(conf_int[1])
+                
+                final_df = pd.DataFrame({
+                    "B (계수)": model.params,
+                    "표준오차(SE)": model.bse,
+                    "Wald Chi-Sq": np.square(model.tvalues),
+                    "p값": model.pvalues,
+                    "Odds Ratio (OR)": odds_ratio,
+                    "95% CI (Lower)": or_ci_lower,
+                    "95% CI (Upper)": or_ci_upper
+                }).reset_index().rename(columns={'index':'변수명'})
+                
+                p_val_model = model.llr_pvalue
+                stats_info = {'r2': model.prsquared}
+
+            final_df['p값'] = final_df['p값'].apply(lambda x: f"{format_p(x)}{get_stars(x)}")
+            
+            interpretation = get_auto_interpretation("회귀분석", p_val_model, stats_dict=stats_info)
+            plt.figure(figsize=(8, 4)); sns.heatmap(df[x_vars + [y_var]].corr(), annot=True, cmap="YlGnBu"); plot_img = get_plot_buffer()
 
     # 결과 출력
     if final_df is not None:
@@ -298,7 +546,7 @@ if up_file:
         c1, c2 = st.columns([1.5, 1])
         with c1: 
             st.table(final_df)
-            st.info(f"결과 해석 안내: {interpretation}")
+            st.info(interpretation) # 해석 엔진 결과 출력
         with c2: 
             if plot_img: st.image(plot_img)
         st.download_button("📄 워드 리포트 다운로드", data=create_word_report(final_df, interpretation, plot_img), file_name=f"STATERA_Report.docx")
