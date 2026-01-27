@@ -45,6 +45,9 @@ st.markdown(f"""
 
     .sub-method-info {{ background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 0.95rem; color: #334155; }}
     
+    /* 가정 검정 박스 스타일 (폰트 통일용) */
+    .assumption-box {{ background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; font-size: 0.95rem; color: #334155; line-height: 1.6; margin-bottom: 15px; }}
+    
     .ethics-container {{ background-color: #fff7ed; border: 1px solid #ffedd5; border-radius: 12px; padding: 20px; margin-top: 50px; margin-bottom: 30px; }}
     .ethics-title {{ color: #c2410c; font-size: 1.1rem; font-weight: 700; margin-bottom: 10px; }}
     .ethics-text {{ color: #9a3412; font-size: 0.9rem; line-height: 1.6; }}
@@ -108,9 +111,9 @@ METHOD_GUIDES = {
     },
     "상관분석": {
         "title": "🔗 상관분석 (Correlation Analysis)",
-        "desc": "두 연속형 변수 간의 관계성(r)과 95% 신뢰구간을 분석합니다.",
-        "독립": "연속형 변수", "종속": "연속형 변수",
-        "use": "한 변수가 증가할 때 다른 변수도 같이 변화하는 경향이 있는지 확인 시 사용합니다."
+        "desc": "다수 변수 간의 기술통계(평균, SD)와 Pearson 상관계수 행렬을 통합 분석합니다.",
+        "독립": "연속형", "종속": "연속형",
+        "use": "변수들 간의 관계성을 종합적으로 보고할 때 사용합니다."
     },
     "회귀분석": {
         "title": "🎯 회귀분석 (Regression Analysis)",
@@ -137,7 +140,7 @@ def get_stars(p):
 
 def format_p(p): return "<.001" if p < .001 else f"{p:.3f}"
 
-# --- 가정 검정 함수들 ---
+# --- 가정 검정 함수들 (강조 제거됨) ---
 def check_normality_shapiro(data, name):
     """정규성 검정 (N < 30: Shapiro-Wilk, N >= 30: CLT)"""
     data = data.dropna()
@@ -145,27 +148,27 @@ def check_normality_shapiro(data, name):
     if n < 3: return "N < 3 (검정 불가)", False
     
     if n >= 30:
-        return f"표본 수 {n}개로 **대표본(N≥30)**에 해당하여 중심극한정리(CLT)에 의해 정규성 가정을 충족한 것으로 간주합니다.", True
+        return f"표본 수 {n}개로 대표본(N≥30)에 해당하여 중심극한정리(CLT)에 의해 정규성 가정을 충족한 것으로 간주합니다.", True
     else:
         stat, p = stats.shapiro(data)
         if p >= 0.05:
-            return f"Shapiro-Wilk 검정 결과(p={format_p(p)}), 정규성 가정을 **만족**합니다.", True
+            return f"Shapiro-Wilk 검정 결과(p={format_p(p)}), 정규성 가정을 만족합니다.", True
         else:
-            return f"Shapiro-Wilk 검정 결과(p={format_p(p)}), 정규성 가정을 **위배**할 가능성이 있습니다.", False
+            return f"Shapiro-Wilk 검정 결과(p={format_p(p)}), 정규성 가정을 위배할 가능성이 있습니다.", False
 
 def check_homogeneity_levene(group_data_list):
     """등분산성 검정 (Levene)"""
     stat, p = stats.levene(*group_data_list)
     if p >= 0.05:
-        return f"Levene 검정 결과(p={format_p(p)}), 등분산 가정을 **만족**합니다.", True
+        return f"Levene 검정 결과(p={format_p(p)}), 등분산 가정을 만족합니다.", True
     else:
-        return f"Levene 검정 결과(p={format_p(p)}), 등분산 가정을 **위배**하였습니다 (이분산).", False
+        return f"Levene 검정 결과(p={format_p(p)}), 등분산 가정을 위배하였습니다 (이분산).", False
 
 def check_independence_dw(resid):
     """독립성 검정 (Durbin-Watson)"""
     dw = durbin_watson(resid)
     if 1.5 <= dw <= 2.5:
-        return f"Durbin-Watson 통계량({dw:.2f})이 2에 가까워 잔차의 독립성 가정을 **만족**합니다.", True
+        return f"Durbin-Watson 통계량({dw:.2f})이 2에 가까워 잔차의 독립성 가정을 만족합니다.", True
     else:
         return f"Durbin-Watson 통계량({dw:.2f})이 기준(1.5~2.5)을 벗어나 자기상관 가능성이 있습니다.", False
 
@@ -192,7 +195,7 @@ def calc_corr_ci(r, n, alpha=0.05):
     lo_z, hi_z = z - z_crit * se, z + z_crit * se
     return np.tanh(lo_z), np.tanh(hi_z)
 
-# --- 해석 엔진 ---
+# --- 해석 엔진 (강조 제거됨) ---
 def interpret_effect_size(val, method):
     abs_val = abs(val)
     if method == "cohen_d":
@@ -216,54 +219,52 @@ def get_auto_interpretation(method, p_val, stats_dict=None):
     sig_text = "통계적으로 유의한 차이(또는 관계)가 확인되었습니다(p < .05)." if is_sig else "통계적으로 유의한 차이(또는 관계)가 확인되지 않았습니다(p >= .05)."
     
     explanation = ""
-    # [수정] 기술통계와 빈도분석은 p-value 해석 제외
-    if method not in ["기술통계", "빈도분석"]:
-        explanation = f"📌 **[1. 결론 요약]** {sig_text}\n\n"
+    # [수정] 기술통계, 빈도분석, 상관분석(표 형태)은 p-value 통합 해석 제외
+    if method not in ["기술통계", "빈도분석", "상관분석"]:
+        explanation = f"📌 [1. 결론 요약] {sig_text}\n\n"
     
     # 가정 검정 결과 요약
     assump_fails = stats_dict.get('assump_fails', [])
     if assump_fails:
-        explanation += f"⚠️ **[주의]** 분석 가정 중 **{', '.join(assump_fails)}** 조건이 충족되지 않았습니다. 결과 해석에 주의가 필요합니다.\n\n"
+        explanation += f"⚠️ [주의] 분석 가정 중 {', '.join(assump_fails)} 조건이 충족되지 않았습니다. 결과 해석에 주의가 필요합니다.\n\n"
 
     # 상세 해석
     if method == "기술통계":
         non_normal_vars = stats_dict.get('non_normal_vars', [])
-        explanation = "📌 **[데이터 분포 해석]**\n"
+        explanation = "📌 [데이터 분포 해석]\n"
         if not non_normal_vars:
-            explanation += "분석된 변수들은 왜도(Abs < 2)와 첨도(Abs < 7) 기준 내에 있어, **정규분포와 유사한 형태**를 보입니다."
+            explanation += "분석된 변수들은 왜도(Abs < 2)와 첨도(Abs < 7) 기준 내에 있어, 정규분포와 유사한 형태를 보입니다."
         else:
-            explanation += f"**[{', '.join(non_normal_vars)}]** 변수는 정규분포 형태에서 벗어나 있습니다 (Ref: West et al., 1995)."
+            explanation += f"[{', '.join(non_normal_vars)}] 변수는 정규분포 형태에서 벗어나 있습니다 (Ref: West et al., 1995)."
 
     elif method == "빈도분석":
-        explanation = "📌 **[해석 가이드]**\n'비율(%)'은 전체 대비 해당 범주의 크기를, '누적 비율'은 순차적으로 합산된 비중을 의미합니다. 데이터가 특정 범주에 편중되어 있는지 확인하십시오."
+        explanation = "📌 [해석 가이드]\n'비율(%)'은 전체 대비 해당 범주의 크기를, '누적 비율'은 순차적으로 합산된 비중을 의미합니다. 데이터가 특정 범주에 편중되어 있는지 확인하십시오."
 
     elif method == "T-검정":
         d_val = stats_dict.get('d', 0)
         ci_lo, ci_hi = stats_dict.get('ci_lo', 0), stats_dict.get('ci_hi', 0)
         d_desc = interpret_effect_size(d_val, "cohen_d")
-        explanation += f"📌 **[2. 효과크기 및 신뢰구간]**\n"
-        explanation += f"- **Cohen's d = {d_val:.2f}:** 두 집단 간에는 **'{d_desc}' 수준의 실질적 차이**가 존재합니다.\n"
-        explanation += f"- **95% 신뢰구간 [{ci_lo:.2f}, {ci_hi:.2f}]:** 반복 연구 시, 실제 평균 차이는 이 범위 내에 존재할 확률이 95%입니다."
+        explanation += f"📌 [2. 효과크기 및 신뢰구간]\n"
+        explanation += f"- Cohen's d = {d_val:.2f}: 두 집단 간에는 '{d_desc}' 수준의 실질적 차이가 존재합니다.\n"
+        explanation += f"- 95% 신뢰구간 [{ci_lo:.2f}, {ci_hi:.2f}]: 반복 연구 시, 실제 평균 차이는 이 범위 내에 존재할 확률이 95%입니다."
 
     elif method == "분산분석":
         eta = stats_dict.get('eta', 0)
         eta_desc = interpret_effect_size(eta, "eta_sq")
-        explanation += f"📌 **[2. 효과크기 해석]**\n"
-        explanation += f"- **Eta-squared ($\eta^2$) = {eta:.3f}:** 독립 변수(집단 구분)가 종속 변수의 변동을 약 **{eta*100:.1f}%** 설명하고 있으며, 이는 **'{eta_desc}' 수준의 설명력**입니다."
+        explanation += f"📌 [2. 효과크기 해석]\n"
+        explanation += f"- Eta-squared ($\eta^2$) = {eta:.3f}: 독립 변수(집단 구분)가 종속 변수의 변동을 약 {eta*100:.1f}% 설명하고 있으며, 이는 '{eta_desc}' 수준의 설명력입니다."
 
     elif method == "상관분석":
-        r_val = stats_dict.get('r', 0)
-        r_desc = interpret_effect_size(r_val, "pearson_r")
-        direction = "양(+)" if r_val > 0 else "음(-)"
-        explanation += f"📌 **[2. 상관관계 해석]**\n"
-        explanation += f"- **상관계수(r) = {r_val:.2f}:** 두 변수는 **{direction}의 방향으로 {r_desc} 선형 관계**를 보입니다.\n"
-        explanation += "- 95% 신뢰구간이 0을 포함하지 않는지 확인하십시오."
+        explanation = "📌 [표 해석 가이드]\n"
+        explanation += "- M: 평균, SD: 표준편차\n"
+        explanation += "- 대각선 아래의 수치는 두 변수 간의 Pearson 상관계수(r)입니다.\n"
+        explanation += "- 별표(*): * p<.05, ** p<.01, *** p<.001 수준에서 통계적으로 유의함을 의미합니다."
 
     elif method == "회귀분석":
         r2 = stats_dict.get('r2', 0)
-        explanation += f"📌 **[2. 모형 적합도 해석]**\n"
-        explanation += f"- **결정계수($R^2$) = {r2:.3f}:** 구축된 회귀 모형은 종속 변수 전체 변동의 약 **{r2*100:.1f}%**를 설명하고 있습니다.\n"
-        explanation += "- 각 독립 변수의 **B(비표준화 계수)** 신뢰구간이 0을 포함하지 않을 때, 해당 변수는 유의한 영향력이 있다고 판단합니다."
+        explanation += f"📌 [2. 모형 적합도 해석]\n"
+        explanation += f"- 결정계수($R^2$) = {r2:.3f}: 구축된 회귀 모형은 종속 변수 전체 변동의 약 {r2*100:.1f}%를 설명하고 있습니다.\n"
+        explanation += "- 각 독립 변수의 B(비표준화 계수) 신뢰구간이 0을 포함하지 않을 때, 해당 변수는 유의한 영향력이 있다고 판단합니다."
 
     return explanation
 
@@ -272,7 +273,7 @@ def create_word_report(df, interpretation, plot_buf=None, assumption_text=""):
     
     if assumption_text:
         doc.add_heading('Assumption Checks', level=1)
-        doc.add_paragraph(assumption_text)
+        doc.add_paragraph(assumption_text.replace("<br>", "\n"))
 
     doc.add_heading('Statistical Results', level=1)
     table = doc.add_table(rows=1, cols=len(df.columns)); table.style = 'Table Grid'
@@ -392,7 +393,7 @@ if up_file:
                     msg_var, equal_var = check_homogeneity_levene([g1, g2])
                     if not equal_var: assump_fails.append("등분산성")
                     
-                    assumption_report = f"- 정규성: {msg_n1} / {msg_n2}\n- 등분산성: {msg_var}"
+                    assumption_report = f"- 정규성: {msg_n1}<br>- 정규성: {msg_n2}<br>- 등분산성: {msg_var}"
                     
                     t_stat, p = stats.ttest_ind(g1, g2, equal_var=equal_var)
                     
@@ -493,7 +494,7 @@ if up_file:
 
             msg_var, equal_var = check_homogeneity_levene(groups)
             if not equal_var: assump_fails.append("등분산성")
-            assumption_report = f"- 등분산성: {msg_var}\n(참고: 정규성은 각 집단별 N>=30일 경우 CLT에 의해 충족 간주)"
+            assumption_report = f"- 등분산성: {msg_var}<br>(참고: 정규성은 각 집단별 N>=30일 경우 CLT에 의해 충족 간주)"
             
             model = ols('Target_Var ~ C(Group_Var)', data=temp_df).fit()
             anova_table = anova_lm(model, typ=2)
@@ -522,33 +523,63 @@ if up_file:
             plt.figure(figsize=(8, 5)); sns.boxplot(x=g, y=y, data=df, palette="viridis"); plot_img = get_plot_buffer()
 
     # -------------------------------------------------------------------------
-    # 5) 상관분석
+    # 5) 상관분석 (업그레이드: APA 스타일 표 생성)
     # -------------------------------------------------------------------------
     elif method == "상관분석":
-        v1, v2 = st.selectbox("변수 1 (연속형)", num_cols), st.selectbox("변수 2 (연속형)", num_cols)
-        if st.button("분석 실행"):
-            d = df[[v1, v2]].dropna()
-            msg_n1, p1 = check_normality_shapiro(d[v1], v1)
-            msg_n2, p2 = check_normality_shapiro(d[v2], v2)
-            if not (p1 and p2): assump_fails.append("이변량 정규성")
-            assumption_report = f"- 정규성({v1}): {msg_n1}\n- 정규성({v2}): {msg_n2}"
+        sel_vars = st.multiselect("분석할 변수들을 모두 선택하세요 (2개 이상)", num_cols)
+        
+        if st.button("분석 실행") and len(sel_vars) >= 2:
+            target_df = df[sel_vars].dropna()
+            n = len(target_df)
             
-            r, p = stats.pearsonr(d[v1], d[v2])
-            n = len(d)
-            ci_lo, ci_hi = calc_corr_ci(r, n)
+            desc_stats = target_df.describe().T[['mean', 'std']]
+            cols = ['M', 'SD'] + [str(i+1) for i in range(len(sel_vars))]
+            corr_table = pd.DataFrame(index=sel_vars, columns=cols)
+            
+            check_normality_msgs = []
+            
+            for i, var_row in enumerate(sel_vars):
+                corr_table.loc[var_row, 'M'] = f"{desc_stats.loc[var_row, 'mean']:.2f}"
+                corr_table.loc[var_row, 'SD'] = f"{desc_stats.loc[var_row, 'std']:.2f}"
+                
+                msg_n, pass_n = check_normality_shapiro(target_df[var_row], var_row)
+                if not pass_n: assump_fails.append(f"정규성({var_row})")
+                check_normality_msgs.append(f"- {var_row}: {msg_n}")
 
-            final_df = pd.DataFrame({
-                "변수 관계": [f"{v1} & {v2}"],
-                "N": [n],
-                "상관계수(r)": [f"{r:.2f}"],
-                "95% CI (Lower)": [f"{ci_lo:.2f}"],
-                "95% CI (Upper)": [f"{ci_hi:.2f}"],
-                "p값": [f"{format_p(p)}{get_stars(p)}"]
-            })
+                for j, var_col in enumerate(sel_vars):
+                    if i == j:
+                        corr_table.iloc[i, j+2] = "1"
+                    elif i > j:
+                        r, p = stats.pearsonr(target_df[var_row], target_df[var_col])
+                        star = get_stars(p)
+                        corr_table.iloc[i, j+2] = f"{r:.2f}{star}"
+                    else:
+                        corr_table.iloc[i, j+2] = ""
             
-            interpretation = get_auto_interpretation("상관분석", p, {'r': r, 'assump_fails': assump_fails})
-            if assump_fails: interpretation += "\n(권고: 정규성 위배 시 Spearman 상관계수를 사용하십시오.)"
-            plt.figure(figsize=(7, 5)); sns.regplot(x=v1, y=v2, data=df, line_kws={'color':'#0d9488'}); plot_img = get_plot_buffer()
+            new_index = [f"{i+1}. {v}" for i, v in enumerate(sel_vars)]
+            corr_table.index = new_index
+            
+            final_df = corr_table
+            assumption_report = "<br>".join(check_normality_msgs)
+            
+            interpretation = get_auto_interpretation("상관분석", 1.0, {'assump_fails': assump_fails})
+            
+            max_r = 0
+            max_pair = ""
+            for i in range(len(sel_vars)):
+                for j in range(i):
+                    val_str = str(corr_table.iloc[i, j+2]).replace('*', '')
+                    try:
+                        val = float(val_str)
+                        if abs(val) > abs(max_r):
+                            max_r = val
+                            max_pair = f"'{sel_vars[i]}' - '{sel_vars[j]}'"
+                    except: pass
+            
+            if max_pair:
+                interpretation += f"\n💡 [핵심 발견] 분석된 변수 중 {max_pair} 간의 관계가 가장 강하게 나타났습니다 (r={max_r:.2f})."
+
+            plt.figure(figsize=(8, 6)); sns.heatmap(target_df.corr(), annot=True, cmap="coolwarm", vmin=-1, vmax=1); plot_img = get_plot_buffer()
 
     # -------------------------------------------------------------------------
     # 6) 회귀분석
@@ -579,7 +610,7 @@ if up_file:
                 if not pass_dw: assump_fails.append("잔차 독립성")
                 if not pass_het: assump_fails.append("잔차 등분산성")
                 
-                assumption_report = f"- 다중공선성: {'문제 없음' if not high_vif else f'의심 변수: {high_vif}'}\n- 독립성: {msg_dw}\n- 등분산성: {msg_het}"
+                assumption_report = f"- 다중공선성: {'문제 없음' if not high_vif else f'의심 변수: {high_vif}'}<br>- 독립성: {msg_dw}<br>- 등분산성: {msg_het}"
 
                 conf_int = model.conf_int(alpha=0.05)
                 conf_int.columns = ['Lower CI', 'Upper CI']
@@ -626,9 +657,15 @@ if up_file:
     if final_df is not None:
         st.markdown('<div class="section-title"><span class="step-badge">02</span> 분석 결과 및 리포트</div>', unsafe_allow_html=True)
         
+        # 가정 검정 결과를 박스(assumption-box class) 안에 출력
         if assumption_report:
             with st.expander("🔍 통계적 가정 검정 결과 (Assumption Checks)", expanded=True):
-                st.markdown(f"```text\n{assumption_report}\n```")
+                st.markdown(f"""
+                <div class="assumption-box">
+                    {assumption_report}
+                </div>
+                """, unsafe_allow_html=True)
+                
                 if assump_fails:
                     st.error(f"⚠️ 위배된 가정: {', '.join(assump_fails)} (해석 시 주의가 필요합니다.)")
                 else:
