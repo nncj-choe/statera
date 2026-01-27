@@ -15,7 +15,7 @@ from docx import Document
 from docx.shared import Inches
 
 # -----------------------------------------------------------------------------
-# 1. UI 스타일링 및 테마 설정 (Pretendard 적용)
+# 1. UI 스타일링 및 테마 설정 
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="STATERA", page_icon="📊", layout="wide")
 
@@ -45,7 +45,7 @@ st.markdown(f"""
 
     .sub-method-info {{ background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 0.95rem; color: #334155; }}
     
-    /* 가정 검정 박스 스타일 (폰트 통일용) */
+    /* 가정 검정 박스 스타일 */
     .assumption-box {{ background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; font-size: 0.95rem; color: #334155; line-height: 1.6; margin-bottom: 15px; }}
     
     .ethics-container {{ background-color: #fff7ed; border: 1px solid #ffedd5; border-radius: 12px; padding: 20px; margin-top: 50px; margin-bottom: 30px; }}
@@ -140,7 +140,7 @@ def get_stars(p):
 
 def format_p(p): return "<.001" if p < .001 else f"{p:.3f}"
 
-# --- 가정 검정 함수들 (강조 제거됨) ---
+# --- 가정 검정 함수들 ---
 def check_normality_shapiro(data, name):
     """정규성 검정 (N < 30: Shapiro-Wilk, N >= 30: CLT)"""
     data = data.dropna()
@@ -195,7 +195,7 @@ def calc_corr_ci(r, n, alpha=0.05):
     lo_z, hi_z = z - z_crit * se, z + z_crit * se
     return np.tanh(lo_z), np.tanh(hi_z)
 
-# --- 해석 엔진 (강조 제거됨) ---
+# --- 해석 엔진 (업그레이드: 회귀분석 유형 구분) ---
 def interpret_effect_size(val, method):
     abs_val = abs(val)
     if method == "cohen_d":
@@ -219,7 +219,7 @@ def get_auto_interpretation(method, p_val, stats_dict=None):
     sig_text = "통계적으로 유의한 차이(또는 관계)가 확인되었습니다(p < .05)." if is_sig else "통계적으로 유의한 차이(또는 관계)가 확인되지 않았습니다(p >= .05)."
     
     explanation = ""
-    # [수정] 기술통계, 빈도분석, 상관분석(표 형태)은 p-value 통합 해석 제외
+    # p-value 통합 해석 제외 항목
     if method not in ["기술통계", "빈도분석", "상관분석"]:
         explanation = f"📌 [1. 결론 요약] {sig_text}\n\n"
     
@@ -262,9 +262,21 @@ def get_auto_interpretation(method, p_val, stats_dict=None):
 
     elif method == "회귀분석":
         r2 = stats_dict.get('r2', 0)
+        reg_type = stats_dict.get('reg_type', 'linear') # 기본값 linear
+        
         explanation += f"📌 [2. 모형 적합도 해석]\n"
-        explanation += f"- 결정계수($R^2$) = {r2:.3f}: 구축된 회귀 모형은 종속 변수 전체 변동의 약 {r2*100:.1f}%를 설명하고 있습니다.\n"
-        explanation += "- 각 독립 변수의 B(비표준화 계수) 신뢰구간이 0을 포함하지 않을 때, 해당 변수는 유의한 영향력이 있다고 판단합니다."
+        if reg_type == 'linear':
+            explanation += f"- 결정계수($R^2$) = {r2:.3f}: 구축된 회귀 모형은 종속 변수 전체 변동의 약 {r2*100:.1f}%를 설명하고 있습니다. (설명력)\n\n"
+            explanation += "📌 [3. 변수별 영향력 해석]\n"
+            explanation += "- B (비표준화 계수): 독립변수가 1단위 증가할 때 결과값(종속변수)이 'B만큼 변한다'는 뜻입니다. (예: B=0.5면 0.5만큼 증가)\n"
+            explanation += "- 유의성 판단: B의 95% 신뢰구간 안에 '0(효과 없음)'이 포함되지 않는다면, 해당 변수는 통계적으로 유의미한 영향력이 있다고 봅니다."
+        else: # logistic
+            explanation += f"- Pseudo $R^2$ = {r2:.3f}: 로지스틱 회귀 모형의 설명력을 나타내는 지표입니다.\n\n"
+            explanation += "📌 [3. 변수별 영향력 해석 (Odds Ratio)]\n"
+            explanation += "- OR (오즈비): 독립변수가 1단위 증가할 때, 사건(Event)이 발생할 확률(Odds)이 몇 배가 되는지를 의미합니다.\n"
+            explanation += "  * OR > 1: 발생 가능성 증가 (위험 요인)\n"
+            explanation += "  * OR < 1: 발생 가능성 감소 (보호 요인)\n"
+            explanation += "- 유의성 판단: OR의 95% 신뢰구간 안에 '1(변화 없음)'이 포함되지 않아야 유의합니다."
 
     return explanation
 
@@ -625,7 +637,7 @@ if up_file:
                 }).reset_index().rename(columns={'index':'변수명'})
                 
                 p_val_model = model.f_pvalue
-                stats_info = {'r2': model.rsquared, 'assump_fails': assump_fails}
+                stats_info = {'r2': model.rsquared, 'assump_fails': assump_fails, 'reg_type': 'linear'}
                 
             else: 
                 model = sm.Logit(Y, X).fit(disp=0)
@@ -647,7 +659,7 @@ if up_file:
                 }).reset_index().rename(columns={'index':'변수명'})
                 
                 p_val_model = model.llr_pvalue
-                stats_info = {'r2': model.prsquared, 'assump_fails': []}
+                stats_info = {'r2': model.prsquared, 'assump_fails': [], 'reg_type': 'logistic'}
 
             final_df['p값'] = final_df['p값'].apply(lambda x: f"{format_p(x)}{get_stars(x)}")
             interpretation = get_auto_interpretation("회귀분석", p_val_model, stats_dict=stats_info)
@@ -657,7 +669,7 @@ if up_file:
     if final_df is not None:
         st.markdown('<div class="section-title"><span class="step-badge">02</span> 분석 결과 및 리포트</div>', unsafe_allow_html=True)
         
-        # 가정 검정 결과를 박스(assumption-box class) 안에 출력
+        # 가정 검정 결과 (로지스틱 회귀 등 가정 불필요 시 Success 메시지 미출력)
         if assumption_report:
             with st.expander("🔍 통계적 가정 검정 결과 (Assumption Checks)", expanded=True):
                 st.markdown(f"""
@@ -669,7 +681,10 @@ if up_file:
                 if assump_fails:
                     st.error(f"⚠️ 위배된 가정: {', '.join(assump_fails)} (해석 시 주의가 필요합니다.)")
                 else:
-                    st.success("✅ 주요 통계적 가정을 모두 충족합니다.")
+                    if "가정이 요구되지 않습니다" in assumption_report:
+                        st.info("ℹ️ 해당 분석은 별도의 가정 검정이 필요하지 않습니다.")
+                    else:
+                        st.success("✅ 주요 통계적 가정을 모두 충족합니다.")
 
         c1, c2 = st.columns([1.5, 1])
         with c1: 
