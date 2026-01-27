@@ -12,7 +12,7 @@ from docx import Document
 from docx.shared import Inches
 
 # -----------------------------------------------------------------------------
-# 1. UI 스타일링 및 테마 설정 
+# 1. UI 스타일링 및 테마 설정
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="STATERA", page_icon="📊", layout="wide")
 
@@ -124,7 +124,7 @@ TTEST_SUB_GUIDES = {
 }
 
 # -----------------------------------------------------------------------------
-# 4. 유틸리티 및 스마트 해석 엔진
+# 4. 유틸리티 및 [스마트 해석 엔진]
 # -----------------------------------------------------------------------------
 def get_stars(p):
     if p < .001: return "***"
@@ -138,7 +138,6 @@ def calc_cohens_d(x1, x2):
     """T-test용 효과크기(Cohen's d) 계산"""
     nx1, nx2 = len(x1), len(x2)
     s1, s2 = np.std(x1, ddof=1), np.std(x2, ddof=1)
-    # Pooled Standard Deviation
     s_pooled = np.sqrt(((nx1 - 1) * s1**2 + (nx2 - 1) * s2**2) / (nx1 + nx2 - 2))
     return (np.mean(x1) - np.mean(x2)) / s_pooled
 
@@ -151,7 +150,6 @@ def calc_corr_ci(r, n, alpha=0.05):
     lo_z, hi_z = z - z_crit * se, z + z_crit * se
     return np.tanh(lo_z), np.tanh(hi_z)
 
-# --- 해석 가이드 생성 함수 ---
 def interpret_effect_size(val, method):
     """효과크기의 강도를 문자로 변환"""
     abs_val = abs(val)
@@ -159,7 +157,7 @@ def interpret_effect_size(val, method):
         if abs_val < 0.2: return "작은(Small)"
         elif abs_val < 0.5: return "중간(Medium)"
         else: return "큰(Large)"
-    elif method == "eta_sq": # Eta-squared
+    elif method == "eta_sq": 
         if abs_val < 0.01: return "미미한"
         elif abs_val < 0.06: return "작은(Small)"
         elif abs_val < 0.14: return "중간(Medium)"
@@ -178,13 +176,21 @@ def get_auto_interpretation(method, p_val, stats_dict=None):
     is_sig = p_val < 0.05
     sig_text = "통계적으로 유의한 차이(또는 관계)가 확인되었습니다(p < .05)." if is_sig else "통계적으로 유의한 차이(또는 관계)가 확인되지 않았습니다(p >= .05)."
     
-    explanation = f"📌 **[1. 유의성 판단]** {sig_text}\n\n"
+    explanation = ""
+    # 기술통계는 p-value 기반 유의성 판단 문구 생략
+    if method != "기술통계":
+        explanation = f"📌 **[1. 유의성 판단]** {sig_text}\n\n"
     
     # 2. 분석 기법별 상세 해석 가이드
     if method == "기술통계":
-        skew, kurt = stats_dict.get('skew', 0), stats_dict.get('kurt', 0)
-        normality = "만족하는 것으로 보입니다" if (abs(skew) < 2 and abs(kurt) < 7) else "벗어날 가능성이 있어 주의가 필요합니다"
-        explanation = f"📌 **[데이터 분포 해석]**\n데이터의 왜도({skew:.2f})와 첨도({kurt:.2f})를 기준으로 볼 때, 정규성 가정을 {normality}."
+        non_normal_vars = stats_dict.get('non_normal_vars', [])
+        
+        explanation = "📌 **[데이터 분포 해석]**\n"
+        if not non_normal_vars:
+            explanation += "분석된 **모든 변수**의 왜도(절대값 < 2)와 첨도(절대값 < 7)가 기준을 충족하여, **정규성 가정을 만족하는 것으로 보입니다.**"
+        else:
+            var_names = ", ".join(non_normal_vars)
+            explanation += f"대부분의 변수는 정규성을 만족할 수 있으나, **[{var_names}]** 변수는 왜도(절대값 2 이상) 또는 첨도(절대값 7 이상) 기준을 벗어나 **정규성 가정 위배 가능성**이 있습니다. 추후 분석 시 데이터 변환이나 비모수 검정을 고려하십시오."
 
     elif method == "빈도분석":
         explanation = "📌 **[해석 가이드]**\n'비율(%)'은 전체 대비 해당 범주의 크기를, '누적 비율'은 순차적으로 합산된 비중을 의미합니다. 데이터가 특정 범주에 편중되어 있는지 확인하십시오."
@@ -196,7 +202,7 @@ def get_auto_interpretation(method, p_val, stats_dict=None):
         
         explanation += f"📌 **[2. 효과크기 및 신뢰구간]**\n"
         explanation += f"- **Cohen's d = {d_val:.2f}:** 두 집단 간에는 **'{d_desc}' 수준의 실질적 차이**가 존재합니다.\n"
-        explanation += f"- **95% 신뢰구간 [{ci_lo:.2f}, {ci_hi:.2f}]:** 반복 연구 시, 실제 평균 차이는 이 범위 내에 존재할 확률이 95%입니다. (구간에 0이 포함되지 않아야 유의합니다.)"
+        explanation += f"- **95% 신뢰구간 [{ci_lo:.2f}, {ci_hi:.2f}]:** 반복 연구 시, 실제 평균 차이는 이 범위 내에 존재할 확률이 95%입니다."
 
     elif method == "분산분석":
         eta = stats_dict.get('eta', 0)
@@ -276,7 +282,7 @@ if up_file:
     final_df, interpretation, plot_img = None, "", None
 
     # -------------------------------------------------------------------------
-    # 1) 기술통계 (보강: 중위수, 왜도, 첨도 + 해석)
+    # 1) 기술통계 
     # -------------------------------------------------------------------------
     if method == "기술통계":
         sel_v = st.multiselect("분석할 연속형 변수를 선택하세요", num_cols)
@@ -288,14 +294,20 @@ if up_file:
             final_df = desc[['count', 'mean', 'std', 'min', '50%', 'max', 'skew', 'kurt']].reset_index()
             final_df.columns = ['변수명', 'N', '평균(M)', '표준편차(SD)', '최솟값', '중위수(Median)', '최댓값', '왜도', '첨도']
             
-            # 해석용 딕셔너리 생성 (첫 번째 변수 기준 예시)
-            stats_info = {'skew': desc['skew'].iloc[0], 'kurt': desc['kurt'].iloc[0]}
-            interpretation = get_auto_interpretation("기술통계", 1.0, stats_dict=stats_info) # p-value 의미 없음
+            # [수정된 로직] 모든 변수 순회하며 정규성 위배 변수 식별
+            non_normal_vars = []
+            for idx, row in final_df.iterrows():
+                # 기준: 왜도 절대값 >= 2 또는 첨도 절대값 >= 7
+                if abs(row['왜도']) >= 2 or abs(row['첨도']) >= 7:
+                    non_normal_vars.append(row['변수명'])
+            
+            stats_info = {'non_normal_vars': non_normal_vars}
+            interpretation = get_auto_interpretation("기술통계", 1.0, stats_dict=stats_info)
             
             plt.figure(figsize=(10, 5)); sns.boxplot(data=df[sel_v], palette="Set2"); plot_img = get_plot_buffer()
 
     # -------------------------------------------------------------------------
-    # 2) 빈도분석 (보강: 누적 비율 + 해석)
+    # 2) 빈도분석
     # -------------------------------------------------------------------------
     elif method == "빈도분석":
         sel_v = st.multiselect("분석할 범주형 변수를 선택하세요", all_cols)
@@ -314,7 +326,7 @@ if up_file:
             plt.figure(figsize=(10, 5)); sns.countplot(x=sel_v[0], data=df, palette="pastel"); plot_img = get_plot_buffer()
 
     # -------------------------------------------------------------------------
-    # 3) T-검정 (대폭 보강: CI, Mean Diff, SE, Effect Size + 해석)
+    # 3) T-검정
     # -------------------------------------------------------------------------
     elif method == "T-검정":
         t_mode = st.radio("세부 유형 선택", list(TTEST_SUB_GUIDES.keys()), horizontal=True)
@@ -330,19 +342,15 @@ if up_file:
                     g1 = df[df[g]==gps[0]][y].dropna()
                     g2 = df[df[g]==gps[1]][y].dropna()
                     
-                    # Levene 등분산 검정
                     levene_p = stats.levene(g1, g2).pvalue
                     equal_var = levene_p > 0.05
                     
-                    # T-test
                     t_stat, p = stats.ttest_ind(g1, g2, equal_var=equal_var)
                     
-                    # 통계량 계산
                     mean_diff = np.mean(g1) - np.mean(g2)
                     n1, n2 = len(g1), len(g2)
                     se_diff = np.sqrt(np.var(g1, ddof=1)/n1 + np.var(g2, ddof=1)/n2)
                     
-                    # 95% CI
                     df_t = n1 + n2 - 2
                     ci_crit = stats.t.ppf(0.975, df_t)
                     ci_lower = mean_diff - ci_crit * se_diff
@@ -417,12 +425,11 @@ if up_file:
                     "t값": [f"{t_stat:.2f}"],
                     "p값": [f"{format_p(p)}{get_stars(p)}"]
                 })
-                # 단일표본은 Cohen's d 생략 (해석 엔진에서 예외 처리됨)
                 interpretation = get_auto_interpretation("T-검정", p)
                 plt.figure(figsize=(6, 5)); sns.histplot(clean_data, kde=True); plt.axvline(mu, color='red', ls='--'); plot_img = get_plot_buffer()
 
     # -------------------------------------------------------------------------
-    # 4) 분산분석 (보강: Eta-squared, 자유도 + 해석)
+    # 4) 분산분석
     # -------------------------------------------------------------------------
     elif method == "분산분석":
         g, y = st.selectbox("집단 변수 (3집단 이상)", all_cols), st.selectbox("결과 변수 (연속형)", num_cols)
@@ -456,7 +463,7 @@ if up_file:
             plt.figure(figsize=(8, 5)); sns.boxplot(x=g, y=y, data=df, palette="viridis"); plot_img = get_plot_buffer()
 
     # -------------------------------------------------------------------------
-    # 5) 상관분석 (보강: CI + 해석)
+    # 5) 상관분석
     # -------------------------------------------------------------------------
     elif method == "상관분석":
         v1, v2 = st.selectbox("변수 1 (연속형)", num_cols), st.selectbox("변수 2 (연속형)", num_cols)
@@ -481,7 +488,7 @@ if up_file:
             plt.figure(figsize=(7, 5)); sns.regplot(x=v1, y=v2, data=df, line_kws={'color':'#0d9488'}); plot_img = get_plot_buffer()
 
     # -------------------------------------------------------------------------
-    # 6) 회귀분석 (보강: R-squared, F값, 모형 적합도 + 해석)
+    # 6) 회귀분석
     # -------------------------------------------------------------------------
     elif method == "회귀분석":
         reg_t = st.radio("유형", ["선형 회귀 (결과가 수치일 때)", "로지스틱 회귀 (결과가 발생여부일 때)"], horizontal=True)
@@ -546,7 +553,7 @@ if up_file:
         c1, c2 = st.columns([1.5, 1])
         with c1: 
             st.table(final_df)
-            st.info(interpretation) # 해석 엔진 결과 출력
+            st.info(interpretation)
         with c2: 
             if plot_img: st.image(plot_img)
         st.download_button("📄 워드 리포트 다운로드", data=create_word_report(final_df, interpretation, plot_img), file_name=f"STATERA_Report.docx")
