@@ -58,7 +58,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 2. 통계 유틸리티 및 멘토 가이드 데이터
+# 2. 통계 멘토 가이드 데이터 및 유틸리티
 # -----------------------------------------------------------------------------
 def format_p(p): return "<.001" if p < .001 else f"{p:.3f}"
 def get_stars(p): return "***" if p < .001 else "**" if p < .01 else "*" if p < .05 else ""
@@ -66,34 +66,53 @@ def get_plot_buffer():
     buf = io.BytesIO(); plt.savefig(buf, format='png', bbox_inches='tight', dpi=300); buf.seek(0); plt.close(); return buf
 
 STAT_MENTOR = {
-    "기술통계": {"purpose": "데이터의 중심 경향성과 분포의 정규성을 요약합니다.", "indicator": "평균은 수준을, 표준편차는 산포도를 나타냅니다.", "check": "왜도와 첨도를 통해 정규분포 충족 여부를 확인하십시오."},
-    "빈도분석": {"purpose": "범주형 변수의 빈도와 비율을 파악합니다.", "indicator": "사례 수(n)와 백분율(%)을 산출하여 제시합니다.", "check": "결측치가 비중 해석에 미치는 영향을 확인하십시오."},
-    "카이제곱 검정": {"purpose": "범주형 변수 간의 통계적 관련성 유무를 검정합니다.", "indicator": "기대빈도 5 미만 셀 비율에 따라 Pearson 또는 Fisher 검정을 선택합니다.", "check": "교차표의 기대빈도 가정이 충족되는지 확인하십시오."},
-    "단일표본 T-검정": {"purpose": "한 집단의 평균을 특정 기준값과 비교합니다.", "indicator": "표본 평균이 설정된 기준치와 유의미하게 차이가 나는지 판정합니다.", "check": "집단의 정규성 가정을 사전에 확인하십시오."},
-    "독립표본 T-검정": {"purpose": "독립적인 두 집단 간의 평균 차이를 비교합니다.", "indicator": "두 집단 간 평균값 차이가 유의미한지 판정합니다.", "check": "두 집단의 정규성과 등분산성 가정을 확인하십시오."},
-    "대응표본 T-검정": {"purpose": "동일 집단의 처치 전후(사전-사후) 평균 변화를 비교합니다.", "indicator": "사전-사후 점수 차이의 평균이 0과 다른지 검증합니다.", "check": "차이값의 정규성 분포를 검토하십시오."},
-    "분산분석(ANOVA)": {"purpose": "세 집단 이상의 평균 차이를 비교 분석합니다.", "indicator": "F값으로 유의성을 판정한 후 사후분석을 수행합니다.", "check": "집단별 정규성과 등분산성 가정을 확인하십시오."},
-    "상관분석": {"purpose": "두 연속형 변수 간의 선형적 관계의 강도를 확인합니다.", "indicator": "상관계수(r)를 통해 변수 간 관계의 밀접도를 확인합니다.", "check": "변수 간 관계가 선형적인지 산점도를 확인하십시오."},
-    "신뢰도 분석": {"purpose": "측정 도구의 문항들이 일관성 있게 측정되는지 평가합니다.", "indicator": "Cronbach α 계수가 0.7 이상일 때 신뢰도를 확보한 것으로 간주합니다.", "check": "역코딩 문항의 변환 여부를 확인하십시오."},
-    "회귀분석": {"purpose": "독립변수가 종속변수에 미치는 영향력을 수치화합니다.", "indicator": "R2로 설명력을, Beta로 영향력의 크기를 평가합니다.", "check": "다중공선성(VIF < 10)과 잔차 가정을 검토하십시오."}
+    "기술통계": {"purpose": "데이터의 중심 경향성과 분포 특성을 요약합니다.", "indicator": "평균은 자료의 수준을, 표준편차는 산포 정도를 나타냅니다.", "check": "왜도와 첨도를 통해 정규분포 가정을 검토하십시오."},
+    "빈도분석": {"purpose": "범주형 변수의 빈도와 비율을 파악합니다.", "indicator": "사례 수(n)와 유효 백분율(%)을 산출하여 제시합니다.", "check": "결측치가 전체 비중에 미치는 영향을 확인하십시오."},
+    "카이제곱 검정": {"purpose": "범주형 변수 간의 통계적 관련성 유무를 확인합니다.", "indicator": "기대빈도 가정 충족 여부에 따라 분석 결과의 타당성을 평가합니다.", "check": "기대빈도 5 미만 셀 비율이 20%를 초과하는지 검토하십시오."},
+    "단일표본 T-검정": {"purpose": "표본 평균을 특정 기준값과 비교하여 차이를 검증합니다.", "indicator": "t값과 유의확률을 통해 기준치와의 통계적 거리를 판정합니다.", "check": "집단의 정규성 가정을 사전에 확인하십시오."},
+    "독립표본 T-검정": {"purpose": "서로 독립적인 두 집단 간의 평균 차이를 비교 분석합니다.", "indicator": "두 집단 간 평균값 차이가 유의미한 수준인지 판정합니다.", "check": "두 집단의 정규성과 등분산성 가정을 확인하십시오."},
+    "대응표본 T-검정": {"purpose": "동일 집단의 처치 전후(사전-사후) 평균 변화를 비교합니다.", "indicator": "사전-사후 점수 차이가 0에서 얼마나 벗어났는지 검증합니다.", "check": "차이값의 정규성 분포를 검토하십시오."},
+    "분산분석(ANOVA)": {"purpose": "세 집단 이상의 평균 차이를 비교하고 변량 차이를 분석합니다.", "indicator": "F값으로 유의성을 판정한 후 사후분석(Tukey 등)을 수행합니다.", "check": "집단별 정규성과 등분산성 가정을 확인하십시오."},
+    "상관분석": {"purpose": "두 연속형 변수 간의 선형적 관계의 강도를 파악합니다.", "indicator": "상관계수(r)를 통해 변수 간 관계의 방향과 밀접도를 평가합니다.", "check": "변수 간의 관계가 선형적인지 산점도를 검토하십시오."},
+    "신뢰도 분석": {"purpose": "측정 도구의 문항들이 일관성 있게 측정되는지 평가합니다.", "indicator": "Cronbach α 계수가 0.7 이상일 때 신뢰도가 확보된 것으로 간주합니다.", "check": "역코딩 문항이 분석 전 적절히 변환되었는지 확인하십시오."},
+    "회귀분석": {"purpose": "독립변수가 종속변수에 미치는 영향력을 수치화합니다.", "indicator": "R2로 모형 설명력을, Beta로 영향력의 크기를 평가합니다.", "check": "다중공선성(VIF < 10)과 잔차 가정을 검토하십시오."}
 }
 
+def create_pro_report(m_name, r_df, interpretation, guide, plot_b=None, assump=""):
+    doc = Document(); doc.styles['Normal'].font.name = 'Malgun Gothic'
+    doc.styles['Normal']._element.rPr.rFonts.set(qn('w:eastAsia'), 'Malgun Gothic')
+    doc.add_heading(f'STATERA Report: {m_name}', 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
+    if assump: doc.add_heading('1. Assumption Checks', level=1); doc.add_paragraph(assump).italic = True
+    doc.add_heading('2. Statistical Results', level=1)
+    t = doc.add_table(r_df.shape[0]+1, r_df.shape[1]); t.style = 'Table Grid'
+    for j, c in enumerate(r_df.columns): t.cell(0,j).text = str(c)
+    for i in range(r_df.shape[0]):
+        for j in range(r_df.shape[1]): t.cell(i+1,j).text = str(r_df.values[i,j])
+    if plot_b: doc.add_heading('3. Visualization', level=1); doc.add_picture(plot_b, width=Inches(4.5))
+    doc.add_heading('4. AI Interpretation', level=1); doc.add_paragraph(interpretation)
+    doc.add_heading('5. Thesis Writing Guide', level=1); doc.add_paragraph(guide)
+    bio = io.BytesIO(); doc.save(bio); bio.seek(0); return bio
+
 # -----------------------------------------------------------------------------
-# 3. 사이드바 (정보 및 연락처) 
+# 3. 사이드바
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("<h1 style='color:#0d9488;'>STATERA 📊</h1>", unsafe_allow_html=True)
     st.caption(ACRONYM_FULL)
     st.markdown("---")
     st.markdown("### 🚧 Research Beta Version")
-    st.info("학생들의 연구 역량 강화를 위해 개발된 웹 기반 통계 솔루션입니다. 현재 알고리즘 타당도 검증 절차를 진행 중입니다.")
+    st.info("본 서비스는 연구 데이터 분석의 진입 장벽을 낮추기 위해 개발된 웹 기반 통계 솔루션입니다. 현재 분석 알고리즘의 타당도 검증 절차를 진행 중입니다.")
     st.markdown("---")
-    st.markdown("### 📬 Contact")
+    st.markdown("### 📬 Contact & Feedback")
+    st.write("오류 제보 및 기능 제안은 언제나 환영합니다.")
+    st.link_button("📧 메일 보내기", "mailto:nncj91@snu.ac.kr")
+    st.caption("주소 복사:")
     st.code("nncj91@snu.ac.kr", language="text")
-    st.caption("Developed by ANDA Lab | Jeongin Choe")
+    st.markdown("---")
+    st.caption("© 2026 ANDA Lab. Developed by Jeongin Choe.")
 
 # -----------------------------------------------------------------------------
-# 4. 메인 워크플로우
+# 4. 메인 어플리케이션 레이아웃
 # -----------------------------------------------------------------------------
 st.markdown('<div class="main-header">STATERA</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">수치적 정확성과 학술적 해석의 논리를 동시에 제공하는 연구용 통계 솔루션입니다.</div>', unsafe_allow_html=True)
@@ -102,11 +121,11 @@ st.markdown(f"""
 <div class="guide-container">
     <div class="guide-box">
         <div class="guide-label">🔒 데이터 보안 안내</div>
-        <div class="guide-text">업로드된 데이터는 분석 즉시 메모리에서 삭제되며 서버에 저장되지 않아 보안이 유지됩니다.</div>
+        <div class="guide-text">업로드된 데이터는 분석 즉시 메모리에서 삭제되며 서버에 저장되지 않아 보안이 철저히 유지됩니다.</div>
     </div>
     <div class="guide-box">
         <div class="guide-label">📄 데이터 형식 가이드</div>
-        <div class="guide-text">첫 행에는 반드시 변수명이 포함되어야 하며 XLSX 또는 CSV 형식을 권장합니다.</div>
+        <div class="guide-text">첫 번째 행에는 반드시 변수명이 포함되어야 하며, XLSX 또는 CSV 형식의 파일만 인식 가능합니다.</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -116,18 +135,20 @@ up_file = st.file_uploader("파일을 업로드하여 분석을 시작하십시�
 if up_file:
     df = pd.read_excel(up_file) if up_file.name.endswith('xlsx') else pd.read_csv(up_file)
     num_cols = df.select_dtypes(include=[np.number]).columns; all_cols = df.columns
-    st.success(f"데이터 로드 완료: N={len(df)}")
+    st.success(f"데이터 로드 완료: 분석 대상 사례 수 N={len(df)}")
 
     # Step 01: 분석 기법 선택
-    st.markdown('<div class="section-title"><span class="step-badge">01</span> 분석 목적 및 기법 선택</div>', unsafe_allow_html=True)
-    group = st.selectbox("분석 범주를 선택하십시오.", ["기초 데이터 분석", "집단 간 차이 검정", "상관성 및 인과관계 규명"])
+    st.markdown('<div class="section-title"><span class="step-badge">01</span> 연구 목적에 따른 분석 기법 선택</div>', unsafe_allow_html=True)
+    group = st.selectbox("분석 범주를 선택하십시오.", ["기초 데이터 분석 (Descriptive/Frequency)", "집단 간 차이 검정 (T-test/ANOVA)", "상관성 및 인과관계 규명 (Regression/Corr)"])
     
     if "기초" in group: m_list = ["기술통계", "빈도분석", "카이제곱 검정"]
     elif "차이" in group: m_list = ["단일표본 T-검정", "독립표본 T-검정", "대응표본 T-검정", "분산분석(ANOVA)"]
     else: m_list = ["상관분석", "신뢰도 분석", "회귀분석"]
     
     method = st.radio("상세 분석 기법 선택", m_list, horizontal=True)
-    m_info = STAT_MENTOR.get(method.split(" ")[0]) if " " in method else STAT_MENTOR.get(method)
+    
+    # 멘토 데이터 참조 
+    m_info = STAT_MENTOR.get(method.split(" (")[0] if " (" in method else method, {"purpose": "데이터 분석 수행", "indicator": "지표 산출", "check": "가정 검토"})
     
     st.markdown(f"""
     <div class="mentor-box">
@@ -144,12 +165,12 @@ if up_file:
     st.markdown('<div class="section-title"><span class="step-badge">02</span> 분석 변수 설정 및 실행</div>', unsafe_allow_html=True)
     final_df, p_val, interp, plot_img, assump_report = None, None, "", None, []
 
-    # --- 분석 로직 구현 ---
+    # 기법별 상세 로직 구현
     if method == "기술통계":
         v = st.selectbox("연속형 변수", num_cols)
         if st.button("통계 분석 실행"):
             final_df = df[[v]].describe().T.reset_index().round(2)
-            plt.figure(figsize=(6,3)); sns.histplot(df[v].dropna(), kde=True); plot_img = get_plot_buffer()
+            plt.figure(figsize=(6,3)); sns.histplot(df[v].dropna(), kde=True, color="#0d9488"); plot_img = get_plot_buffer()
             interp = f"📌 {v}의 평균은 {df[v].mean():.2f}(SD={df[v].std():.2f})입니다."
 
     elif method == "빈도분석":
@@ -160,7 +181,7 @@ if up_file:
                 counts = df[c].value_counts().reset_index(); counts.columns = ['범주', 'n']
                 counts['%'] = (counts['n'] / counts['n'].sum() * 100).round(1)
                 counts.insert(0, '변수명', c); res.append(counts)
-            final_df = pd.concat(res); interp = "대상자 분포를 확인하십시오."
+            final_df = pd.concat(res); interp = "대상자의 일반적 분포를 확인하십시오."
 
     elif method == "카이제곱 검정":
         r, c = st.selectbox("행 변수", all_cols), st.selectbox("열 변수", all_cols)
@@ -177,7 +198,7 @@ if up_file:
             assump_report.append(f"정규성 검정 (Shapiro-Wilk): p={format_p(sp)}")
             stat, p = stats.ttest_1samp(data, ref_v); p_val = p
             final_df = pd.DataFrame({"방법": [method], "t값": [stat], "df": [len(data)-1], "p값": [format_p(p)]})
-            interp = f"📌 {y}의 평균과 기준값 간의 차이는 {'유의합니다' if p < 0.05 else '유의하지 않습니다'}."
+            interp = f"📌 평균과 기준값 간의 차이는 {'유의합니다' if p < 0.05 else '유의하지 않습니다'}."
 
     elif method == "독립표본 T-검정":
         g, y = st.selectbox("집단 변수(2분류)", all_cols), st.selectbox("검정 변수", num_cols)
@@ -187,13 +208,13 @@ if up_file:
             stat, p = stats.ttest_ind(g1, g2, equal_var=(lp >= 0.05)); p_val = p
             final_df = pd.DataFrame({"방법": [method], "t값": [stat], "p값": [format_p(p)]})
             plt.figure(figsize=(5,4)); sns.boxplot(x=g, y=y, data=df); plot_img = get_plot_buffer()
-            interp = f"📌 {gps[0]}와 {gps[1]} 집단 간 {y}의 평균 차이는 {'유의합니다' if p < 0.05 else '유의하지 않습니다'}."
+            interp = f"📌 두 집단 간 {y}의 평균 차이는 {'유의합니다' if p < 0.05 else '유의하지 않습니다'}."
 
     elif method == "대응표본 T-검정":
         y1, y2 = st.selectbox("사전 변수", num_cols), st.selectbox("사후 변수", num_cols)
         if st.button("통계 분석 실행"):
             diff = df[y2] - df[y1]; _, sp = stats.shapiro(diff.dropna())
-            assump_report.append(f"차이값의 정규성 검정: p={format_p(sp)}")
+            assump_report.append(f"차이값 정규성 검정: p={format_p(sp)}")
             stat, p = stats.ttest_rel(df[y1].dropna(), df[y2].dropna()); p_val = p
             final_df = pd.DataFrame({"방법": [method], "t값": [stat], "p값": [format_p(p)]})
             interp = f"📌 사전 대비 사후의 수치 변화는 {'유의합니다' if p < 0.05 else '유의하지 않습니다'}."
@@ -207,14 +228,14 @@ if up_file:
             interp = f"📌 집단 간 차이 유의성 p={format_p(p_val)}"
 
     elif method == "상관분석":
-        sel_vs = st.multiselect("분석할 변수군들을 선택하십시오.", num_cols)
+        sel_vs = st.multiselect("분석할 변수군 선택", num_cols)
         if st.button("통계 분석 실행") and len(sel_vs) >= 2:
             final_df = df[sel_vs].corr().round(3)
             plt.figure(figsize=(7,5)); sns.heatmap(final_df, annot=True, cmap="coolwarm"); plot_img = get_plot_buffer()
             interp = "변수 간 선형적 상관계수 행렬입니다."
 
     elif method == "신뢰도 분석":
-        sel_items = st.multiselect("신뢰도를 측정할 문항군들을 선택하십시오.", num_cols)
+        sel_items = st.multiselect("문항군 선택", num_cols)
         if st.button("통계 분석 실행") and len(sel_items) >= 2:
             items = df[sel_items].dropna(); k = items.shape[1]
             alpha = (k/(k-1)) * (1 - (items.var(ddof=1).sum() / items.sum(axis=1).var(ddof=1)))
@@ -222,13 +243,13 @@ if up_file:
             interp = f"📌 신뢰도 계수는 {alpha:.3f}로 확인되었습니다."
 
     elif method == "회귀분석":
-        rtype = st.radio("회귀분석 유형 선택", ["선형 회귀분석 (Linear)", "로지스틱 회귀분석 (Logistic)"])
+        rtype = st.radio("회귀 유형", ["선형 회귀분석 (Linear)", "로지스틱 회귀분석 (Logistic)"])
         xs, y = st.multiselect("독립변수군", num_cols), st.selectbox("종속변수", num_cols)
         if st.button("통계 분석 실행") and xs:
             if "선형" in rtype:
                 X = sm.add_constant(df[xs]); model = sm.OLS(df[y], X).fit(); p_val = model.f_pvalue
                 vifs = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
-                assump_report.append(f"다중공선성 확인: 최대 VIF={max(vifs):.2f}")
+                assump_report.append(f"최대 VIF: {max(vifs):.2f}")
                 final_df = pd.DataFrame({"B": model.params, "p": model.pvalues}).reset_index().round(3)
                 interp = f"📌 R2={model.rsquared:.3f}, 모델 유의성 p={format_p(p_val)}"
             else:
@@ -236,7 +257,7 @@ if up_file:
                 final_df = pd.DataFrame({"OR": np.exp(model.params), "p": model.pvalues}).reset_index().round(3)
                 interp = f"📌 로지스틱 모형 유의성 p={format_p(p_val)}"
 
-    # --- Step 03: 결과 대시보드 ---
+    # --- Step 03: 결과 대시보드 및 리포트 ---
     if final_df is not None:
         st.markdown('<div class="section-title"><span class="step-badge">03</span> 분석 결과 요약 및 학술적 해석</div>', unsafe_allow_html=True)
         if assump_report:
@@ -253,15 +274,15 @@ if up_file:
         with c2:
             if plot_img: st.image(plot_img)
             st.info("💡 학술적 조언: 가정 검정이 위배된 경우 비모수 통계법 활용을 권장합니다.")
+        
+        st.download_button("📄 워드 리포트 다운로드", create_pro_report(method, final_df, interp, "통계 수치를 논문에 인용하세요.", plot_b=plot_img, assump="\n".join(assump_report)), f"STATERA_{method}.docx")
 
-# -----------------------------------------------------------------------------
-# 5. 연구 윤리 및 푸터
-# -----------------------------------------------------------------------------
+# 하단 연구 윤리 가이드
 st.markdown(f"""
 <div class="ethics-container">
     <div class="ethics-title">⚠️ 연구자 유의사항</div>
     <div class="ethics-text">
-        1. 본 서비스의 결과는 유의수준 0.05를 기준으로 한 통계적 판정 결과입니다.<br>
+        1. 본 서비스에서 산출된 결과는 유의수준 0.05를 기준으로 한 통계적 판정입니다.<br>
         2. 최종 분석 결과의 정확성을 검토하고 보고서를 작성할 책임은 연구자 본인에게 있습니다.
     </div>
 </div>
