@@ -146,11 +146,23 @@ if up_file:
 
     # Step 01: 분석 기법 선택
     st.markdown('<div class="section-title"><span class="step-badge">01</span> 연구 목적에 따른 분석 기법 선택</div>', unsafe_allow_html=True)
-    group = st.selectbox("분석 범주를 선택하십시오.", ["기초 데이터 분석 (Descriptive/Frequency)", "집단 간 차이 검정 (T-test/ANOVA)", "상관성 및 인과관계 규명 (Regression/Corr)"])
     
-    if "기초" in group: m_list = ["기술통계", "빈도분석", "카이제곱 검정"]
-    elif "차이" in group: m_list = ["단일표본 T-검정", "독립표본 T-검정", "대응표본 T-검정", "분산분석(ANOVA)"]
-    else: m_list = ["상관분석", "신뢰도 분석", "회귀분석"]
+    # [수정됨] 신뢰도 분석을 별도 카테고리로 분리
+    group = st.selectbox("분석 범주를 선택하십시오.", [
+        "기초 데이터 분석 (Descriptive/Frequency)", 
+        "집단 간 차이 검정 (T-test/ANOVA)", 
+        "관계 및 영향력 분석 (Regression/Corr)",
+        "척도 신뢰도 분석 (Reliability)" # 별도 카테고리 추가
+    ])
+    
+    if "기초" in group: 
+        m_list = ["기술통계", "빈도분석", "카이제곱 검정"]
+    elif "차이" in group: 
+        m_list = ["단일표본 T-검정", "독립표본 T-검정", "대응표본 T-검정", "분산분석(ANOVA)"]
+    elif "관계" in group: 
+        m_list = ["상관분석", "회귀분석"]
+    else: # 신뢰도 분석 선택 시
+        m_list = ["신뢰도 분석"]
     
     method = st.radio("상세 분석 기법 선택", m_list, horizontal=True)
     
@@ -231,7 +243,6 @@ if up_file:
             else:
                 gps = df[g].unique(); g1, g2 = df[df[g]==gps[0]][y].dropna(), df[df[g]==gps[1]][y].dropna()
                 
-                # 정규성 검정 추가 (비모수 제안용)
                 _, sp1 = stats.shapiro(g1); _, sp2 = stats.shapiro(g2)
                 if sp1 > 0.05 and sp2 > 0.05:
                      assump_report.append(f'<div class="assumption-pass">✅ 정규성 가정 충족: 두 집단 모두 정규분포를 따릅니다.</div>')
@@ -260,8 +271,16 @@ if up_file:
                 assump_report.append(f'<div class="assumption-pass">✅ 차이의 정규성 충족: Shapiro-Wilk 검정(p={sp:.3f} > .05)을 만족합니다.</div>')
             else:
                 assump_report.append(f'<div class="assumption-fail">⚠️ 차이의 정규성 위배: p={sp:.3f} < .05. (대안으로 비모수 검정인 Wilcoxon Signed-Rank Test 사용 권장)</div>')
+            
             stat, p = stats.ttest_rel(df[y1].dropna(), df[y2].dropna()); p_val = p
-            final_df = pd.DataFrame({"변수": [y1, y2], "Mean": [df[y1].mean(), df[y2].mean()], "t값": [stat], "p값": [format_p(p)]})
+            
+            # [수정됨] 데이터프레임 길이 오류 해결 (빈 문자열 패딩)
+            final_df = pd.DataFrame({
+                "변수": [y1, y2], 
+                "Mean": [df[y1].mean(), df[y2].mean()], 
+                "t값": [f"{stat:.3f}", ""], 
+                "p값": [format_p(p), ""]
+            })
             interp = f"📌 사전 대비 사후의 수치 변화는 {'유의합니다' if p < 0.05 else '유의하지 않습니다'}."
 
     elif method == "분산분석(ANOVA)":
@@ -299,11 +318,16 @@ if up_file:
             interp = "변수 간 선형적 상관계수 행렬입니다. 0.7 이상이면 강한 상관관계입니다."
 
     elif method == "신뢰도 분석":
-        sel_items = st.multiselect("문항군 선택 (연속형)", num_cols)
+        sel_items = st.multiselect("신뢰도 분석할 문항군 선택 (연속형)", num_cols)
         if st.button("통계 분석 실행") and len(sel_items) >= 2:
             items = df[sel_items].dropna(); k = items.shape[1]
             alpha = (k/(k-1)) * (1 - (items.var(ddof=1).sum() / items.sum(axis=1).var(ddof=1)))
-            assump_report.append(f'<div class="{"assumption-pass" if alpha >= 0.7 else "assumption-fail"}">{"✅ 신뢰도 양호" if alpha >= 0.7 else "⚠️ 신뢰도 낮음"}: Cronbach Alpha {alpha:.3f} (기준 0.7 이상 권장)</div>')
+            
+            if alpha >= 0.7:
+                assump_report.append(f'<div class="assumption-pass">✅ 신뢰도 양호: Cronbach Alpha {alpha:.3f} (기준 0.7 이상)</div>')
+            else:
+                assump_report.append(f'<div class="assumption-fail">⚠️ 신뢰도 낮음: Cronbach Alpha {alpha:.3f} (기준 0.7 미만). 문항 제거 또는 수정 필요.</div>')
+            
             final_df = pd.DataFrame({"측정 지표": ["Cronbach α"], "수치": [f"{alpha:.3f}"]})
             interp = f"📌 신뢰도 계수는 {alpha:.3f}로 확인되었습니다."
 
