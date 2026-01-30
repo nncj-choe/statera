@@ -46,8 +46,8 @@ st.markdown(f"""
     .section-title {{ font-size: 1.6rem; font-weight: 800; color: #0f172a; margin-top: 50px; margin-bottom: 25px; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; display: flex; align-items: center; }}
     .step-badge {{ background: #0d9488; color: white; border-radius: 8px; padding: 4px 15px; font-size: 0.9rem; margin-right: 15px; vertical-align: middle; }}
 
-    .assumption-pass {{ background-color: #dcfce7; color: #166534; padding: 10px; border-radius: 8px; margin-bottom: 5px; border: 1px solid #bbf7d0; font-weight: 600; }}
-    .assumption-fail {{ background-color: #fee2e2; color: #991b1b; padding: 10px; border-radius: 8px; margin-bottom: 5px; border: 1px solid #fecaca; font-weight: 600; }}
+    .assumption-pass {{ background-color: #dcfce7; color: #166534; padding: 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #bbf7d0; font-weight: 600; font-size: 0.95rem; }}
+    .assumption-fail {{ background-color: #fee2e2; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #fecaca; font-weight: 600; font-size: 0.95rem; }}
     .interpretation-box {{ background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 25px; border-radius: 15px; font-size: 1.1rem; line-height: 1.7; color: #1e40af; }}
     
     .ethics-container {{ background-color: #fff7ed; border: 1px solid #ffedd5; border-radius: 12px; padding: 20px; margin-top: 50px; margin-bottom: 30px; }}
@@ -121,7 +121,7 @@ with st.sidebar:
 # 4. 메인 어플리케이션 레이아웃
 # -----------------------------------------------------------------------------
 st.markdown('<div class="main-header">STATERA</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">수치적 결과 산출을 넘어 연구 논리와 학술적 해석의 과정을 체득하는 통계 학습 플랫폼입니다.</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">수치적 결과 산출을 넘어, 연구 논리와 학술적 해석의 과정을 체득하는 통계 학습 플랫폼입니다.</div>', unsafe_allow_html=True)
 
 st.markdown(f"""
 <div class="guide-container">
@@ -154,7 +154,6 @@ if up_file:
     
     method = st.radio("상세 분석 기법 선택", m_list, horizontal=True)
     
-    # 멘토 데이터 참조 
     m_info = STAT_MENTOR.get(method.split(" (")[0] if " (" in method else method, {"purpose": "데이터 분석 수행", "indicator": "지표 산출", "check": "가정 검토"})
     
     st.markdown(f"""
@@ -178,13 +177,10 @@ if up_file:
         if st.button("통계 분석 실행"):
             final_df = df[[v]].describe().T.reset_index().round(2)
             skew = df[v].skew(); kurt = df[v].kurt()
-            
-            # 가정 검정: 정규성 (왜도/첨도 기준)
             if abs(skew) < 3 and abs(kurt) < 10:
                 assump_report.append(f'<div class="assumption-pass">✅ 정규성 가정 충족: 왜도({skew:.2f})와 첨도({kurt:.2f})가 기준 이내입니다.</div>')
             else:
-                assump_report.append(f'<div class="assumption-fail">⚠️ 정규성 가정 위배 의심: 왜도({skew:.2f}) 또는 첨도({kurt:.2f})가 기준을 초과합니다.</div>')
-
+                assump_report.append(f'<div class="assumption-fail">⚠️ 정규성 가정 위배: 왜도/첨도 기준 초과. (데이터 변환 또는 비모수적 기술통계 고려 권장)</div>')
             plt.figure(figsize=(6,3)); sns.histplot(df[v].dropna(), kde=True, color="#0d9488"); plot_img = get_plot_buffer()
             interp = f"📌 {v}의 평균은 {df[v].mean():.2f}(SD={df[v].std():.2f})입니다."
 
@@ -205,14 +201,11 @@ if up_file:
         c = st.selectbox("열 변수 (범주형)", all_cols)
         if st.button("통계 분석 실행"):
             ct = pd.crosstab(df[r], df[c]); chi2, p, _, exp = stats.chi2_contingency(ct)
-            
-            # 가정 검정: 기대빈도
             under_5_pct = (exp < 5).sum() / exp.size * 100
             if under_5_pct <= 20:
                 assump_report.append(f'<div class="assumption-pass">✅ 기대빈도 가정 충족: 기대빈도 5 미만 셀이 {under_5_pct:.1f}%(20% 이하)입니다.</div>')
             else:
-                assump_report.append(f'<div class="assumption-fail">⚠️ 기대빈도 가정 위배: 기대빈도 5 미만 셀이 {under_5_pct:.1f}%로 20%를 초과합니다. (Fisher의 정확검정 권장)</div>')
-
+                assump_report.append(f'<div class="assumption-fail">⚠️ 기대빈도 가정 위배: 20% 초과. (대안으로 Fisher의 정확 검정(Fisher\'s Exact Test) 사용 권장)</div>')
             final_df = ct.astype(str) + " (" + (ct/ct.sum()*100).round(1).astype(str) + "%)"
             p_val = p; interp = f"📌 {r}와 {c} 간 연관성 유의확률: p={format_p(p)}"
 
@@ -221,13 +214,10 @@ if up_file:
         ref_v = st.number_input("비교할 기준값 (Test Value)", value=0.0)
         if st.button("통계 분석 실행"):
             data = df[y].dropna(); _, sp = stats.shapiro(data)
-            
-            # 가정 검정: 정규성
             if sp > 0.05:
-                assump_report.append(f'<div class="assumption-pass">✅ 정규성 가정 충족: Shapiro-Wilk 검정 결과(p={sp:.3f} > .05) 정규분포를 따릅니다.</div>')
+                assump_report.append(f'<div class="assumption-pass">✅ 정규성 가정 충족: Shapiro-Wilk 검정(p={sp:.3f} > .05) 결과 정규분포를 따릅니다.</div>')
             else:
-                assump_report.append(f'<div class="assumption-fail">⚠️ 정규성 가정 위배: Shapiro-Wilk 검정 결과(p={sp:.3f} < .05) 정규분포를 따르지 않습니다. (Wilcoxon 검정 권장)</div>')
-            
+                assump_report.append(f'<div class="assumption-fail">⚠️ 정규성 가정 위배: p={sp:.3f} < .05. (대안으로 비모수 검정인 Wilcoxon Signed-Rank Test 사용 권장)</div>')
             stat, p = stats.ttest_1samp(data, ref_v); p_val = p
             final_df = pd.DataFrame({"방법": [method], "t값": [stat], "df": [len(data)-1], "p값": [format_p(p)]})
             interp = f"📌 평균과 기준값 간의 차이는 {'유의합니다' if p < 0.05 else '유의하지 않습니다'}."
@@ -240,14 +230,20 @@ if up_file:
                 st.error("집단 변수는 정확히 2개의 범주를 가져야 합니다.")
             else:
                 gps = df[g].unique(); g1, g2 = df[df[g]==gps[0]][y].dropna(), df[df[g]==gps[1]][y].dropna()
-                _, lp = stats.levene(g1, g2)
                 
-                # 가정 검정: 등분산성
+                # 정규성 검정 추가 (비모수 제안용)
+                _, sp1 = stats.shapiro(g1); _, sp2 = stats.shapiro(g2)
+                if sp1 > 0.05 and sp2 > 0.05:
+                     assump_report.append(f'<div class="assumption-pass">✅ 정규성 가정 충족: 두 집단 모두 정규분포를 따릅니다.</div>')
+                else:
+                     assump_report.append(f'<div class="assumption-fail">⚠️ 정규성 가정 위배: 한 집단 이상이 정규성을 만족하지 않습니다. (대안으로 Mann-Whitney U Test 사용 권장)</div>')
+
+                _, lp = stats.levene(g1, g2)
                 if lp > 0.05:
-                    assump_report.append(f'<div class="assumption-pass">✅ 등분산성 가정 충족: Levene 검정 결과(p={lp:.3f} > .05) 분산이 동일합니다.</div>')
+                    assump_report.append(f'<div class="assumption-pass">✅ 등분산성 가정 충족: Levene 검정(p={lp:.3f} > .05) 결과 분산이 동일합니다.</div>')
                     stat, p = stats.ttest_ind(g1, g2, equal_var=True)
                 else:
-                    assump_report.append(f'<div class="assumption-fail">⚠️ 등분산성 가정 위배: Levene 검정 결과(p={lp:.3f} < .05) 분산이 다릅니다. (Welch\'s T-test 자동 적용)</div>')
+                    assump_report.append(f'<div class="assumption-fail">⚠️ 등분산성 가정 위배: p={lp:.3f} < .05. (자동으로 Welch\'s T-test를 적용하여 분석을 수행했습니다)</div>')
                     stat, p = stats.ttest_ind(g1, g2, equal_var=False)
 
                 p_val = p
@@ -260,13 +256,10 @@ if up_file:
         y2 = st.selectbox("사후 변수 (연속형)", num_cols)
         if st.button("통계 분석 실행"):
             diff = df[y2] - df[y1]; _, sp = stats.shapiro(diff.dropna())
-            
-            # 가정 검정: 차이의 정규성
             if sp > 0.05:
                 assump_report.append(f'<div class="assumption-pass">✅ 차이의 정규성 충족: Shapiro-Wilk 검정(p={sp:.3f} > .05)을 만족합니다.</div>')
             else:
-                assump_report.append(f'<div class="assumption-fail">⚠️ 차이의 정규성 위배: Shapiro-Wilk 검정(p={sp:.3f} < .05)을 만족하지 않습니다. (Wilcoxon Signed-Rank 권장)</div>')
-
+                assump_report.append(f'<div class="assumption-fail">⚠️ 차이의 정규성 위배: p={sp:.3f} < .05. (대안으로 비모수 검정인 Wilcoxon Signed-Rank Test 사용 권장)</div>')
             stat, p = stats.ttest_rel(df[y1].dropna(), df[y2].dropna()); p_val = p
             final_df = pd.DataFrame({"변수": [y1, y2], "Mean": [df[y1].mean(), df[y2].mean()], "t값": [stat], "p값": [format_p(p)]})
             interp = f"📌 사전 대비 사후의 수치 변화는 {'유의합니다' if p < 0.05 else '유의하지 않습니다'}."
@@ -276,37 +269,31 @@ if up_file:
         y = st.selectbox("검정 변수 (연속형)", num_cols)
         if st.button("통계 분석 실행"):
             model = ols(f'{y} ~ C({g})', data=df).fit()
-            
-            # 가정 검정 1: 정규성
-            resid = model.resid
-            _, sp = stats.shapiro(resid)
+            resid = model.resid; _, sp = stats.shapiro(resid)
             if sp > 0.05:
                 assump_report.append(f'<div class="assumption-pass">✅ 잔차 정규성 충족: Shapiro-Wilk p={sp:.3f}</div>')
             else:
-                assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 정규성 위배: Shapiro-Wilk p={sp:.3f} (Kruskal-Wallis 권장)</div>')
+                assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 정규성 위배: p={sp:.3f}. (대안으로 Kruskal-Wallis Test 사용 권장)</div>')
             
-            # 가정 검정 2: 등분산성
             grps = [df[df[g] == k][y].dropna() for k in df[g].unique()]
             _, lp = stats.levene(*grps)
             if lp > 0.05:
                 assump_report.append(f'<div class="assumption-pass">✅ 등분산성 충족: Levene p={lp:.3f}</div>')
             else:
-                assump_report.append(f'<div class="assumption-fail">⚠️ 등분산성 위배: Levene p={lp:.3f} (Brown-Forsythe 또는 Welch ANOVA 권장)</div>')
+                assump_report.append(f'<div class="assumption-fail">⚠️ 등분산성 위배: p={lp:.3f}. (대안으로 Welch ANOVA 사용 권장)</div>')
 
             res = anova_lm(model, typ=2); p_val = res.iloc[0,3]
             final_df = res.reset_index().round(3)
-            
             if p_val < 0.05:
                 tukey = pairwise_tukeyhsd(df[y].dropna(), df[g].dropna())
                 st.info("💡 사후검정(Tukey HSD) 결과가 하단에 출력됩니다.")
                 st.text(str(tukey))
-            
             interp = f"📌 집단 간 차이 유의성 p={format_p(p_val)}"
 
     elif method == "상관분석":
         sel_vs = st.multiselect("분석할 변수군 선택 (연속형)", num_cols)
         if st.button("통계 분석 실행") and len(sel_vs) >= 2:
-            assump_report.append('<div class="assumption-pass">ℹ️ 선형성 가정: 산점도를 통해 두 변수 간의 직선 관계를 확인해야 합니다.</div>')
+            assump_report.append('<div class="assumption-pass">ℹ️ 선형성 가정 확인 필요: 산점도를 통해 두 변수 간의 직선 관계를 시각적으로 확인하십시오. (비선형일 경우 Spearman 상관분석 권장)</div>')
             final_df = df[sel_vs].corr().round(3)
             plt.figure(figsize=(7,5)); sns.heatmap(final_df, annot=True, cmap="coolwarm"); plot_img = get_plot_buffer()
             interp = "변수 간 선형적 상관계수 행렬입니다. 0.7 이상이면 강한 상관관계입니다."
@@ -316,7 +303,7 @@ if up_file:
         if st.button("통계 분석 실행") and len(sel_items) >= 2:
             items = df[sel_items].dropna(); k = items.shape[1]
             alpha = (k/(k-1)) * (1 - (items.var(ddof=1).sum() / items.sum(axis=1).var(ddof=1)))
-            assump_report.append(f'<div class="{"assumption-pass" if alpha >= 0.7 else "assumption-fail"}">{"✅ 신뢰도 양호" if alpha >= 0.7 else "⚠️ 신뢰도 낮음"}: Cronbach Alpha {alpha:.3f} (기준 0.7)</div>')
+            assump_report.append(f'<div class="{"assumption-pass" if alpha >= 0.7 else "assumption-fail"}">{"✅ 신뢰도 양호" if alpha >= 0.7 else "⚠️ 신뢰도 낮음"}: Cronbach Alpha {alpha:.3f} (기준 0.7 이상 권장)</div>')
             final_df = pd.DataFrame({"측정 지표": ["Cronbach α"], "수치": [f"{alpha:.3f}"]})
             interp = f"📌 신뢰도 계수는 {alpha:.3f}로 확인되었습니다."
 
@@ -328,22 +315,17 @@ if up_file:
         if st.button("통계 분석 실행") and xs:
             if "선형" in rtype:
                 X = sm.add_constant(df[xs]); model = sm.OLS(df[y], X).fit(); p_val = model.f_pvalue
-                
-                # 가정 검정 1: 다중공선성
                 vifs = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
-                max_vif = max(vifs[1:]) # 상수항 제외
+                max_vif = max(vifs[1:])
                 if max_vif < 10:
                     assump_report.append(f'<div class="assumption-pass">✅ 다중공선성 없음: 최대 VIF {max_vif:.2f} (기준 10 미만)</div>')
                 else:
-                    assump_report.append(f'<div class="assumption-fail">⚠️ 다중공선성 경고: 최대 VIF {max_vif:.2f} (변수 제거 고려)</div>')
-
-                # 가정 검정 2: 독립성
+                    assump_report.append(f'<div class="assumption-fail">⚠️ 다중공선성 경고: 최대 VIF {max_vif:.2f} (변수 제거 또는 차원 축소 고려 권장)</div>')
                 dw = durbin_watson(model.resid)
                 if 1.5 < dw < 2.5:
                      assump_report.append(f'<div class="assumption-pass">✅ 잔차 독립성 충족: Durbin-Watson {dw:.2f} (2에 근접)</div>')
                 else:
-                     assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 독립성 주의: Durbin-Watson {dw:.2f}</div>')
-
+                     assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 독립성 주의: Durbin-Watson {dw:.2f} (시계열 분석 등 고려 필요)</div>')
                 final_df = pd.DataFrame({"B": model.params, "p": model.pvalues}).reset_index().round(3)
                 interp = f"📌 R2={model.rsquared:.3f}, 모델 유의성 p={format_p(p_val)}"
             else:
@@ -355,7 +337,6 @@ if up_file:
     if final_df is not None:
         st.markdown('<div class="section-title"><span class="step-badge">03</span> 분석 결과 요약 및 학술적 해석</div>', unsafe_allow_html=True)
         
-        # 가정 검정 리포트 출력
         if assump_report:
             with st.expander("🔍 필수 가정 검정 (Assumption Check) 결과 확인", expanded=True):
                 st.caption("통계 분석의 신뢰성을 확보하기 위해 필수적으로 확인해야 할 가정들입니다.")
@@ -370,9 +351,7 @@ if up_file:
             st.table(final_df); st.markdown(f'<div class="interpretation-box">{interp}</div>', unsafe_allow_html=True)
         with c2:
             if plot_img: st.image(plot_img)
-            st.info("💡 학술적 조언: 가정 검정이 위배된 경우 비모수 통계법 활용을 권장합니다.")
         
-        # 리포트 다운로드 시 HTML 태그 제거된 텍스트 전달
         st.download_button("📄 워드 리포트 다운로드", 
                            create_pro_report(method, final_df, interp, "통계 수치를 논문에 인용하세요.", plot_b=plot_img, assump="\n".join(assump_report)), 
                            f"STATERA_{method}.docx")
