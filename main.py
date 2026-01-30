@@ -48,7 +48,6 @@ st.markdown(f"""
 
     .assumption-pass {{ background-color: #dcfce7; color: #166534; padding: 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #bbf7d0; font-weight: 600; font-size: 0.95rem; }}
     .assumption-fail {{ background-color: #fee2e2; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #fecaca; font-weight: 600; font-size: 0.95rem; }}
-    .interpretation-box {{ background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 25px; border-radius: 15px; font-size: 1.1rem; line-height: 1.7; color: #1e40af; }}
     
     .ethics-container {{ background-color: #fff7ed; border: 1px solid #ffedd5; border-radius: 12px; padding: 20px; margin-top: 50px; margin-bottom: 30px; }}
     .ethics-title {{ color: #c2410c; font-size: 1.1rem; font-weight: 700; margin-bottom: 10px; }}
@@ -56,6 +55,10 @@ st.markdown(f"""
 
     div[data-testid="stRadio"] > div {{ flex-direction: row; gap: 20px; overflow-x: auto; }}
     .stButton>button {{ width: 100%; border-radius: 12px; background: #0d9488; color: white; font-weight: 700; height: 3.8em; border: none; transition: 0.4s; }}
+    
+    /* 데이터프레임 헤더 스타일링 */
+    thead tr th:first-child {{ display:none }}
+    tbody th {{ display:none }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -147,12 +150,11 @@ if up_file:
     # Step 01: 분석 기법 선택
     st.markdown('<div class="section-title"><span class="step-badge">01</span> 연구 목적에 따른 분석 기법 선택</div>', unsafe_allow_html=True)
     
-    # [수정됨] 신뢰도 분석을 별도 카테고리로 분리
     group = st.selectbox("분석 범주를 선택하십시오.", [
         "기초 데이터 분석 (Descriptive/Frequency)", 
         "집단 간 차이 검정 (T-test/ANOVA)", 
         "관계 및 영향력 분석 (Regression/Corr)",
-        "척도 신뢰도 분석 (Reliability)" # 별도 카테고리 추가
+        "척도 신뢰도 분석 (Reliability)"
     ])
     
     if "기초" in group: 
@@ -161,7 +163,7 @@ if up_file:
         m_list = ["단일표본 T-검정", "독립표본 T-검정", "대응표본 T-검정", "분산분석(ANOVA)"]
     elif "관계" in group: 
         m_list = ["상관분석", "회귀분석"]
-    else: # 신뢰도 분석 선택 시
+    else: 
         m_list = ["신뢰도 분석"]
     
     method = st.radio("상세 분석 기법 선택", m_list, horizontal=True)
@@ -274,7 +276,6 @@ if up_file:
             
             stat, p = stats.ttest_rel(df[y1].dropna(), df[y2].dropna()); p_val = p
             
-            # [수정됨] 데이터프레임 길이 오류 해결 (빈 문자열 패딩)
             final_df = pd.DataFrame({
                 "변수": [y1, y2], 
                 "Mean": [df[y1].mean(), df[y2].mean()], 
@@ -312,9 +313,19 @@ if up_file:
     elif method == "상관분석":
         sel_vs = st.multiselect("분석할 변수군 선택 (연속형)", num_cols)
         if st.button("통계 분석 실행") and len(sel_vs) >= 2:
-            assump_report.append('<div class="assumption-pass">ℹ️ 선형성 가정 확인 필요: 산점도를 통해 두 변수 간의 직선 관계를 시각적으로 확인하십시오. (비선형일 경우 Spearman 상관분석 권장)</div>')
             final_df = df[sel_vs].corr().round(3)
-            plt.figure(figsize=(7,5)); sns.heatmap(final_df, annot=True, cmap="coolwarm"); plot_img = get_plot_buffer()
+            
+            if len(sel_vs) == 2:
+                plt.figure(figsize=(6, 5))
+                sns.regplot(x=df[sel_vs[0]], y=df[sel_vs[1]], line_kws={"color": "red"})
+                plot_img = get_plot_buffer()
+                assump_report.append('<div class="assumption-pass">✅ 시각적 검토 준비 완료: 하단에 생성된 <b>산점도(Scatter Plot)와 회귀선</b>을 통해 두 변수가 직선 형태의 패턴을 보이는지 시각적으로 판단하십시오.</div>')
+            else:
+                plt.figure(figsize=(7, 5))
+                sns.heatmap(final_df, annot=True, cmap="coolwarm")
+                plot_img = get_plot_buffer()
+                assump_report.append('<div class="assumption-pass">ℹ️ 다변량 분석 안내: 전체적인 패턴 파악을 위해 히트맵을 제공합니다. 정밀한 선형성 검토가 필요한 경우, 변수를 2개씩 선택하여 산점도를 확인하십시오.</div>')
+
             interp = "변수 간 선형적 상관계수 행렬입니다. 0.7 이상이면 강한 상관관계입니다."
 
     elif method == "신뢰도 분석":
@@ -357,28 +368,61 @@ if up_file:
                 final_df = pd.DataFrame({"OR": np.exp(model.params), "p": model.pvalues}).reset_index().round(3)
                 interp = f"📌 로지스틱 모형 유의성 p={format_p(p_val)}"
 
-    # --- Step 03: 결과 대시보드 및 리포트 ---
+    # --- Step 03: 결과 대시보드 (Solution 1 적용) ---
     if final_df is not None:
         st.markdown('<div class="section-title"><span class="step-badge">03</span> 분석 결과 요약 및 학술적 해석</div>', unsafe_allow_html=True)
         
+        # 1. 필수 가정 검정 (Assumptions)
         if assump_report:
             with st.expander("🔍 필수 가정 검정 (Assumption Check) 결과 확인", expanded=True):
                 st.caption("통계 분석의 신뢰성을 확보하기 위해 필수적으로 확인해야 할 가정들입니다.")
                 for msg in assump_report: st.markdown(msg, unsafe_allow_html=True)
         
-        if p_val is not None:
-            if p_val < 0.05: st.success(f"✅ 분석 결과가 유의수준 0.05에서 통계적으로 유의미합니다. (p={format_p(p_val)})")
-            else: st.error(f"❌ 분석 결과가 유의수준 0.05에서 통계적으로 유의미하지 않습니다. (p={format_p(p_val)})")
+        st.markdown("###") # 여백 추가
 
-        c1, c2 = st.columns([1.5, 1])
-        with c1:
-            st.table(final_df); st.markdown(f'<div class="interpretation-box">{interp}</div>', unsafe_allow_html=True)
-        with c2:
-            if plot_img: st.image(plot_img)
+        # 2. 메인 대시보드 (Left: Table / Right: Card & Button)
+        col_main_L, col_main_R = st.columns([1.3, 1]) 
         
-        st.download_button("📄 워드 리포트 다운로드", 
-                           create_pro_report(method, final_df, interp, "통계 수치를 논문에 인용하세요.", plot_b=plot_img, assump="\n".join(assump_report)), 
-                           f"STATERA_{method}.docx")
+        with col_main_L:
+            st.markdown("##### 📋 통계량 상세표")
+            # 데이터프레임을 깔끔하게 표시
+            st.dataframe(final_df, use_container_width=True, hide_index=True)
+            
+        with col_main_R:
+            st.markdown("##### 💡 핵심 결론")
+            
+            # P-value에 따른 상태 카드 로직
+            if p_val is not None:
+                if p_val < 0.05:
+                    status_bg = "#dcfce7"; status_icon = "✅"; status_msg = "통계적 유의성 확보"
+                else:
+                    status_bg = "#fee2e2"; status_icon = "❌"; status_msg = "통계적으로 유의하지 않음"
+            else:
+                # 기술통계, 빈도분석, 신뢰도 등 P-value가 없는 경우
+                status_bg = "#f1f5f9"; status_icon = "📊"; status_msg = "분석 결과 요약"
+
+            # HTML Card 렌더링
+            st.markdown(f"""
+            <div style="background-color: {status_bg}; padding: 20px; border-radius: 12px; border: 1px solid #cbd5e1; margin-bottom: 15px;">
+                <div style="font-size: 1.1rem; font-weight: 700; color: #334155; margin-bottom: 8px;">{status_icon} {status_msg}</div>
+                <div style="font-size: 0.95rem; color: #475569; line-height: 1.6;">{interp}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # 다운로드 버튼 (카드 바로 아래에 꽉 차게 배치)
+            st.download_button(
+                label="📄 워드 리포트 다운로드",
+                data=create_pro_report(method, final_df, interp, "통계 수치를 논문에 인용하세요.", plot_b=plot_img, assump="\n".join(assump_report)),
+                file_name=f"STATERA_{method}.docx",
+                use_container_width=True, 
+                type="primary"
+            )
+
+        # 3. 시각화 (그래프가 있다면 하단에 크게 배치)
+        if plot_img:
+            st.markdown("###")
+            st.markdown("##### 📊 시각화 결과")
+            st.image(plot_img, use_container_width=True)
 
 # 하단 연구 윤리 가이드
 st.markdown(f"""
