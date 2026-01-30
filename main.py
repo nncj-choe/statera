@@ -56,7 +56,7 @@ st.markdown(f"""
     div[data-testid="stRadio"] > div {{ flex-direction: row; gap: 20px; overflow-x: auto; }}
     .stButton>button {{ width: 100%; border-radius: 12px; background: #0d9488; color: white; font-weight: 700; height: 3.8em; border: none; transition: 0.4s; }}
     
-    /* 데이터프레임 헤더 스타일링 및 인덱스 숨기기용 */
+    /* 데이터프레임 헤더 스타일링 */
     thead tr th:first-child {{ display:none }}
     tbody th {{ display:none }}
 </style>
@@ -153,7 +153,7 @@ if up_file:
     group = st.selectbox("분석 범주를 선택하십시오.", [
         "기초 데이터 분석 (Descriptive/Frequency)", 
         "집단 간 차이 검정 (T-test/ANOVA)", 
-        "관계 및 영향력 분석 (Regression/Corr)",
+        "관계 및 영향력 분석 (Regression/Corr/Chi2)",
         "척도 신뢰도 분석 (Reliability)"
     ])
     
@@ -162,7 +162,7 @@ if up_file:
     elif "차이" in group: 
         m_list = ["단일표본 T-검정", "독립표본 T-검정", "대응표본 T-검정", "분산분석(ANOVA)"]
     elif "관계" in group: 
-        m_list = ["상관분석", "회귀분석"]
+        m_list = ["상관분석", "회귀분석", "카이제곱 검정"]
     else: 
         m_list = ["신뢰도 분석"]
     
@@ -276,7 +276,6 @@ if up_file:
             
             stat, p = stats.ttest_rel(df[y1].dropna(), df[y2].dropna()); p_val = p
             
-            # DataFrame 길이 오류 수정: 빈 문자열로 패딩
             final_df = pd.DataFrame({
                 "변수": [y1, y2], 
                 "Mean": [df[y1].mean(), df[y2].mean()], 
@@ -316,7 +315,6 @@ if up_file:
         if st.button("통계 분석 실행") and len(sel_vs) >= 2:
             final_df = df[sel_vs].corr().round(3)
             
-            # 2개 변수 선택 시 산점도 제공
             if len(sel_vs) == 2:
                 plt.figure(figsize=(6, 5))
                 sns.regplot(x=df[sel_vs[0]], y=df[sel_vs[1]], line_kws={"color": "red"})
@@ -364,13 +362,14 @@ if up_file:
                 else:
                      assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 독립성 주의: Durbin-Watson {dw:.2f} (시계열 분석 등 고려 필요)</div>')
                 
-                # [논문용 상세 결과] B, SE, t, p
+                # [수정됨] 논문용 상세 결과 + 변수명 인덱스 리셋
                 final_df = pd.DataFrame({
                     "B": model.params,
                     "SE": model.bse,
                     "t": model.tvalues,
                     "p": model.pvalues
                 }).round(3)
+                final_df = final_df.reset_index().rename(columns={'index': '변수명'}) # 변수명 보이게 처리
                 final_df['p'] = final_df['p'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
                 
                 interp = f"📌 모델 설명력(Adjusted R²)은 {model.rsquared_adj:.3f}이며, 모형의 적합도는 유의합니다(p={format_p(p_val)})."
@@ -378,11 +377,11 @@ if up_file:
             else: # 로지스틱
                 X = sm.add_constant(df[xs]); model = sm.Logit(df[y], X).fit(disp=False); p_val = model.llr_pvalue
                 
-                # [논문용 상세 결과] B, SE, OR, 95% CI
                 params = model.params
                 conf = model.conf_int()
                 conf.columns = ['Lower CI', 'Upper CI']
                 
+                # [수정됨] 논문용 상세 결과 + 변수명 인덱스 리셋
                 final_df = pd.DataFrame({
                     "B": params,
                     "SE": model.bse,
@@ -391,6 +390,7 @@ if up_file:
                     "95% CI Upper": np.exp(conf['Upper CI']),
                     "p": model.pvalues
                 }).round(3)
+                final_df = final_df.reset_index().rename(columns={'index': '변수명'}) # 변수명 보이게 처리
                 final_df['p'] = final_df['p'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
                 
                 interp = f"📌 로지스틱 회귀모형의 적합도는 유의합니다(p={format_p(p_val)}). OR(오즈비) 신뢰구간이 1을 포함하지 않아야 유의합니다."
@@ -399,36 +399,32 @@ if up_file:
     if final_df is not None:
         st.markdown('<div class="section-title"><span class="step-badge">03</span> 분석 결과 요약 및 학술적 해석</div>', unsafe_allow_html=True)
         
-        # 1. 필수 가정 검정 (Assumptions)
         if assump_report:
             with st.expander("🔍 필수 가정 검정 (Assumption Check) 결과 확인", expanded=True):
                 st.caption("통계 분석의 신뢰성을 확보하기 위해 필수적으로 확인해야 할 가정들입니다.")
                 for msg in assump_report: st.markdown(msg, unsafe_allow_html=True)
         
-        st.markdown("###") # 간격
+        st.markdown("###")
 
         # 2. 메인 대시보드 (좌측: 상세표 / 우측: 요약카드 & 다운로드)
         col_main_L, col_main_R = st.columns([1.3, 1]) 
         
         with col_main_L:
             st.markdown("##### 📋 통계량 상세표")
-            # 데이터프레임 표시 (인덱스 숨김)
+            # hide_index=True로 인해 변수명이 사라지는 것을 방지하기 위해 위에서 reset_index()를 선행했음
             st.dataframe(final_df, use_container_width=True, hide_index=True)
             
         with col_main_R:
             st.markdown("##### 💡 핵심 결론")
             
-            # P-value 존재 여부에 따른 카드 상태 설정
             if p_val is not None:
                 if p_val < 0.05:
                     status_bg = "#dcfce7"; status_icon = "✅"; status_msg = "통계적 유의성 확보"
                 else:
                     status_bg = "#fee2e2"; status_icon = "❌"; status_msg = "통계적으로 유의하지 않음"
             else:
-                # 기술통계, 빈도분석 등 P-value 개념이 없는 경우
                 status_bg = "#f1f5f9"; status_icon = "📊"; status_msg = "분석 결과 요약"
 
-            # HTML Card 렌더링
             st.markdown(f"""
             <div style="background-color: {status_bg}; padding: 20px; border-radius: 12px; border: 1px solid #cbd5e1; margin-bottom: 15px;">
                 <div style="font-size: 1.1rem; font-weight: 700; color: #334155; margin-bottom: 8px;">{status_icon} {status_msg}</div>
@@ -436,7 +432,6 @@ if up_file:
             </div>
             """, unsafe_allow_html=True)
             
-            # 다운로드 버튼 (카드 하단에 꽉 차게 배치)
             st.download_button(
                 label="📄 워드 리포트 다운로드",
                 data=create_pro_report(method, final_df, interp, "통계 수치를 논문에 인용하세요.", plot_b=plot_img, assump="\n".join(assump_report)),
@@ -445,7 +440,7 @@ if up_file:
                 type="primary"
             )
 
-        # 3. 시각화 (그래프가 있다면 하단에 크게 배치)
+        # 3. 시각화
         if plot_img:
             st.markdown("###")
             st.markdown("##### 📊 시각화 결과")
