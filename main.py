@@ -153,7 +153,7 @@ if up_file:
     group = st.selectbox("분석 범주를 선택하십시오.", [
         "기초 데이터 분석 (Descriptive/Frequency)", 
         "집단 간 차이 검정 (T-test/ANOVA)", 
-        "관계 및 영향력 분석 (Regression/Corr/Chi2)",
+        "관계 및 영향력 분석 (Chi2/Corr/Regression)",
         "척도 신뢰도 분석 (Reliability)"
     ])
     
