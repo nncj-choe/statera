@@ -73,7 +73,7 @@ def get_plot_buffer():
 STAT_MENTOR = {
     "기술통계": {"purpose": "데이터의 중심 경향성과 분포 특성을 요약합니다.", "indicator": "평균은 자료의 수준을, 표준편차는 산포 정도를 나타냅니다.", "check": "왜도와 첨도를 통해 정규분포 가정을 검토하십시오."},
     "빈도분석": {"purpose": "범주형 변수의 빈도와 비율을 파악합니다.", "indicator": "사례 수(n)와 유효 백분율(%)을 산출하여 제시합니다.", "check": "결측치가 전체 비중에 미치는 영향을 확인하십시오."},
-    "카이제곱 검정": {"purpose": "범주형 변수 간의 통계적 관련성 유무를 확인합니다.", "indicator": "기대빈도 가정 충족 여부에 따라 분석 결과의 타당성을 평가합니다.", "check": "기대빈도 5 미만 셀 비율이 20%를 초과하는지 검토하십시오."},
+    "카이제곱 검정": {"purpose": "범주형 변수 간의 통계적 관련성(연관성) 유무를 확인합니다.", "indicator": "기대빈도 가정 충족 여부에 따라 분석 결과의 타당성을 평가합니다.", "check": "기대빈도 5 미만 셀 비율이 20%를 초과하는지 검토하십시오."},
     "단일표본 T-검정": {"purpose": "표본 평균을 특정 기준값과 비교하여 차이를 검증합니다.", "indicator": "t값과 유의확률을 통해 기준치와의 통계적 거리를 판정합니다.", "check": "집단의 정규성 가정을 사전에 확인하십시오."},
     "독립표본 T-검정": {"purpose": "서로 독립적인 두 집단 간의 평균 차이를 비교 분석합니다.", "indicator": "두 집단 간 평균값 차이가 유의미한 수준인지 판정합니다.", "check": "두 집단의 정규성과 등분산성 가정을 확인하십시오."},
     "대응표본 T-검정": {"purpose": "동일 집단의 처치 전후(사전-사후) 평균 변화를 비교합니다.", "indicator": "사전-사후 점수 차이가 0에서 얼마나 벗어났는지 검증합니다.", "check": "차이값의 정규성 분포를 검토하십시오."},
@@ -158,11 +158,12 @@ if up_file:
     ])
     
     if "기초" in group: 
-        m_list = ["기술통계", "빈도분석", "카이제곱 검정"]
+        m_list = ["기술통계", "빈도분석"]
     elif "차이" in group: 
         m_list = ["단일표본 T-검정", "독립표본 T-검정", "대응표본 T-검정", "분산분석(ANOVA)"]
     elif "관계" in group: 
-        m_list = ["상관분석", "회귀분석", "카이제곱 검정"]
+        # [수정] 카이제곱 검정을 가장 앞으로 이동
+        m_list = ["카이제곱 검정", "상관분석", "회귀분석"]
     else: 
         m_list = ["신뢰도 분석"]
     
@@ -362,17 +363,26 @@ if up_file:
                 else:
                      assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 독립성 주의: Durbin-Watson {dw:.2f} (시계열 분석 등 고려 필요)</div>')
                 
-                # [수정됨] 논문용 상세 결과 + 변수명 인덱스 리셋
+                # 결과 테이블 생성
                 final_df = pd.DataFrame({
                     "B": model.params,
                     "SE": model.bse,
                     "t": model.tvalues,
                     "p": model.pvalues
                 }).round(3)
-                final_df = final_df.reset_index().rename(columns={'index': '변수명'}) # 변수명 보이게 처리
+                final_df = final_df.reset_index().rename(columns={'index': '변수명'})
                 final_df['p'] = final_df['p'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
                 
-                interp = f"📌 모델 설명력(Adjusted R²)은 {model.rsquared_adj:.3f}이며, 모형의 적합도는 유의합니다(p={format_p(p_val)})."
+                # [수정] 선형 회귀분석 변수별 해석 추가
+                sig_vars = []
+                for var in xs:
+                    if var in model.pvalues and model.pvalues[var] < 0.05:
+                        coef = model.params[var]
+                        effect = "정(+)의 영향" if coef > 0 else "부(-)의 영향"
+                        sig_vars.append(f"<b>{var}</b>({effect})")
+                
+                var_msg = ("또한, " + ", ".join(sig_vars) + "을 미치는 것으로 나타났습니다.") if sig_vars else "유의한 독립변수는 발견되지 않았습니다."
+                interp = f"📌 모델 설명력(Adj R²)은 {model.rsquared_adj:.3f}이며, 모형은 유의합니다(p={format_p(p_val)}). {var_msg}"
 
             else: # 로지스틱
                 X = sm.add_constant(df[xs]); model = sm.Logit(df[y], X).fit(disp=False); p_val = model.llr_pvalue
@@ -381,7 +391,6 @@ if up_file:
                 conf = model.conf_int()
                 conf.columns = ['Lower CI', 'Upper CI']
                 
-                # [수정됨] 논문용 상세 결과 + 변수명 인덱스 리셋
                 final_df = pd.DataFrame({
                     "B": params,
                     "SE": model.bse,
@@ -390,12 +399,21 @@ if up_file:
                     "95% CI Upper": np.exp(conf['Upper CI']),
                     "p": model.pvalues
                 }).round(3)
-                final_df = final_df.reset_index().rename(columns={'index': '변수명'}) # 변수명 보이게 처리
+                final_df = final_df.reset_index().rename(columns={'index': '변수명'})
                 final_df['p'] = final_df['p'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
                 
-                interp = f"📌 로지스틱 회귀모형의 적합도는 유의합니다(p={format_p(p_val)}). OR(오즈비) 신뢰구간이 1을 포함하지 않아야 유의합니다."
+                # [수정] 로지스틱 회귀분석 변수별 해석 추가 (OR 기준)
+                sig_vars = []
+                for var in xs:
+                    if var in model.pvalues and model.pvalues[var] < 0.05:
+                        or_val = np.exp(model.params[var])
+                        effect = "증가" if or_val > 1 else "감소"
+                        sig_vars.append(f"<b>{var}</b>(OR={or_val:.2f}, 확률 {effect})")
+                
+                var_msg = ("또한, " + ", ".join(sig_vars) + " 시키는 경향이 유의했습니다.") if sig_vars else "유의한 독립변수는 발견되지 않았습니다."
+                interp = f"📌 로지스틱 모형은 유의합니다(p={format_p(p_val)}). {var_msg}"
 
-    # --- Step 03: 결과 대시보드 (Solution 1: Dashboard Style) ---
+    # --- Step 03: 결과 대시보드 ---
     if final_df is not None:
         st.markdown('<div class="section-title"><span class="step-badge">03</span> 분석 결과 요약 및 학술적 해석</div>', unsafe_allow_html=True)
         
@@ -406,12 +424,10 @@ if up_file:
         
         st.markdown("###")
 
-        # 2. 메인 대시보드 (좌측: 상세표 / 우측: 요약카드 & 다운로드)
         col_main_L, col_main_R = st.columns([1.3, 1]) 
         
         with col_main_L:
             st.markdown("##### 📋 통계량 상세표")
-            # hide_index=True로 인해 변수명이 사라지는 것을 방지하기 위해 위에서 reset_index()를 선행했음
             st.dataframe(final_df, use_container_width=True, hide_index=True)
             
         with col_main_R:
@@ -440,7 +456,6 @@ if up_file:
                 type="primary"
             )
 
-        # 3. 시각화
         if plot_img:
             st.markdown("###")
             st.markdown("##### 📊 시각화 결과")
