@@ -56,7 +56,7 @@ st.markdown(f"""
     div[data-testid="stRadio"] > div {{ flex-direction: row; gap: 20px; overflow-x: auto; }}
     .stButton>button {{ width: 100%; border-radius: 12px; background: #0d9488; color: white; font-weight: 700; height: 3.8em; border: none; transition: 0.4s; }}
     
-    /* 데이터프레임 헤더 스타일링 */
+    /* 데이터프레임 헤더 스타일링 및 인덱스 숨기기용 */
     thead tr th:first-child {{ display:none }}
     tbody th {{ display:none }}
 </style>
@@ -276,6 +276,7 @@ if up_file:
             
             stat, p = stats.ttest_rel(df[y1].dropna(), df[y2].dropna()); p_val = p
             
+            # DataFrame 길이 오류 수정: 빈 문자열로 패딩
             final_df = pd.DataFrame({
                 "변수": [y1, y2], 
                 "Mean": [df[y1].mean(), df[y2].mean()], 
@@ -315,6 +316,7 @@ if up_file:
         if st.button("통계 분석 실행") and len(sel_vs) >= 2:
             final_df = df[sel_vs].corr().round(3)
             
+            # 2개 변수 선택 시 산점도 제공
             if len(sel_vs) == 2:
                 plt.figure(figsize=(6, 5))
                 sns.regplot(x=df[sel_vs[0]], y=df[sel_vs[1]], line_kws={"color": "red"})
@@ -351,7 +353,7 @@ if up_file:
             if "선형" in rtype:
                 X = sm.add_constant(df[xs]); model = sm.OLS(df[y], X).fit(); p_val = model.f_pvalue
                 vifs = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
-                max_vif = max(vifs[1:])
+                max_vif = max(vifs[1:]) if len(vifs) > 1 else 1.0
                 if max_vif < 10:
                     assump_report.append(f'<div class="assumption-pass">✅ 다중공선성 없음: 최대 VIF {max_vif:.2f} (기준 10 미만)</div>')
                 else:
@@ -361,14 +363,39 @@ if up_file:
                      assump_report.append(f'<div class="assumption-pass">✅ 잔차 독립성 충족: Durbin-Watson {dw:.2f} (2에 근접)</div>')
                 else:
                      assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 독립성 주의: Durbin-Watson {dw:.2f} (시계열 분석 등 고려 필요)</div>')
-                final_df = pd.DataFrame({"B": model.params, "p": model.pvalues}).reset_index().round(3)
-                interp = f"📌 R2={model.rsquared:.3f}, 모델 유의성 p={format_p(p_val)}"
-            else:
-                X = sm.add_constant(df[xs]); model = sm.Logit(df[y], X).fit(); p_val = model.llr_pvalue
-                final_df = pd.DataFrame({"OR": np.exp(model.params), "p": model.pvalues}).reset_index().round(3)
-                interp = f"📌 로지스틱 모형 유의성 p={format_p(p_val)}"
+                
+                # [논문용 상세 결과] B, SE, t, p
+                final_df = pd.DataFrame({
+                    "B": model.params,
+                    "SE": model.bse,
+                    "t": model.tvalues,
+                    "p": model.pvalues
+                }).round(3)
+                final_df['p'] = final_df['p'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
+                
+                interp = f"📌 모델 설명력(Adjusted R²)은 {model.rsquared_adj:.3f}이며, 모형의 적합도는 유의합니다(p={format_p(p_val)})."
 
-    # --- Step 03: 결과 대시보드 (Solution 1 적용) ---
+            else: # 로지스틱
+                X = sm.add_constant(df[xs]); model = sm.Logit(df[y], X).fit(disp=False); p_val = model.llr_pvalue
+                
+                # [논문용 상세 결과] B, SE, OR, 95% CI
+                params = model.params
+                conf = model.conf_int()
+                conf.columns = ['Lower CI', 'Upper CI']
+                
+                final_df = pd.DataFrame({
+                    "B": params,
+                    "SE": model.bse,
+                    "OR": np.exp(params),
+                    "95% CI Lower": np.exp(conf['Lower CI']),
+                    "95% CI Upper": np.exp(conf['Upper CI']),
+                    "p": model.pvalues
+                }).round(3)
+                final_df['p'] = final_df['p'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
+                
+                interp = f"📌 로지스틱 회귀모형의 적합도는 유의합니다(p={format_p(p_val)}). OR(오즈비) 신뢰구간이 1을 포함하지 않아야 유의합니다."
+
+    # --- Step 03: 결과 대시보드 (Solution 1: Dashboard Style) ---
     if final_df is not None:
         st.markdown('<div class="section-title"><span class="step-badge">03</span> 분석 결과 요약 및 학술적 해석</div>', unsafe_allow_html=True)
         
@@ -378,27 +405,27 @@ if up_file:
                 st.caption("통계 분석의 신뢰성을 확보하기 위해 필수적으로 확인해야 할 가정들입니다.")
                 for msg in assump_report: st.markdown(msg, unsafe_allow_html=True)
         
-        st.markdown("###") # 여백 추가
+        st.markdown("###") # 간격
 
-        # 2. 메인 대시보드 (Left: Table / Right: Card & Button)
+        # 2. 메인 대시보드 (좌측: 상세표 / 우측: 요약카드 & 다운로드)
         col_main_L, col_main_R = st.columns([1.3, 1]) 
         
         with col_main_L:
             st.markdown("##### 📋 통계량 상세표")
-            # 데이터프레임을 깔끔하게 표시
+            # 데이터프레임 표시 (인덱스 숨김)
             st.dataframe(final_df, use_container_width=True, hide_index=True)
             
         with col_main_R:
             st.markdown("##### 💡 핵심 결론")
             
-            # P-value에 따른 상태 카드 로직
+            # P-value 존재 여부에 따른 카드 상태 설정
             if p_val is not None:
                 if p_val < 0.05:
                     status_bg = "#dcfce7"; status_icon = "✅"; status_msg = "통계적 유의성 확보"
                 else:
                     status_bg = "#fee2e2"; status_icon = "❌"; status_msg = "통계적으로 유의하지 않음"
             else:
-                # 기술통계, 빈도분석, 신뢰도 등 P-value가 없는 경우
+                # 기술통계, 빈도분석 등 P-value 개념이 없는 경우
                 status_bg = "#f1f5f9"; status_icon = "📊"; status_msg = "분석 결과 요약"
 
             # HTML Card 렌더링
@@ -409,7 +436,7 @@ if up_file:
             </div>
             """, unsafe_allow_html=True)
             
-            # 다운로드 버튼 (카드 바로 아래에 꽉 차게 배치)
+            # 다운로드 버튼 (카드 하단에 꽉 차게 배치)
             st.download_button(
                 label="📄 워드 리포트 다운로드",
                 data=create_pro_report(method, final_df, interp, "통계 수치를 논문에 인용하세요.", plot_b=plot_img, assump="\n".join(assump_report)),
