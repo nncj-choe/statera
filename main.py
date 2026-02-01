@@ -290,11 +290,14 @@ if up_file:
         y = st.selectbox("검정 변수 (연속형)", num_cols)
         
         if st.button("통계 분석 실행"):
-            # 1. Centering (첫 번째 값을 뺌) 로직 적용 
+            # -------------------------------------------------------
+            # [Expert Patch] NIST 고정밀 검증을 위한 Centering Logic 적용
+            # -------------------------------------------------------
             y_centered = f"_{y}_centered"
-            df[y_centered] = df[y] - df[y].iloc(0)
+            # 평균 대신 '첫 번째 행의 값(iloc[0])'을 빼서 오차를 원천 차단합니다.
+            df[y_centered] = df[y] - df[y].iloc[0]
 
-            # 2. 중심화된 변수로 모델 적합
+            # 중심화된 변수로 모델 적합
             model = ols(f'{y_centered} ~ C({g})', data=df).fit()
             
             # 3. 가정 검정 및 결과 산출
@@ -312,7 +315,7 @@ if up_file:
             else:
                 assump_report.append(f'<div class="assumption-fail">⚠️ 등분산성 위배: p={lp:.3f}. (대안으로 Welch ANOVA 사용 권장)</div>')
 
-            # 4. 결과표 생성 (표준 논문 양식으로 변환)
+            # 4. 결과표 생성 (표준 논문 양식)
             res = anova_lm(model, typ=2)
             res['mean_sq'] = res['sum_sq'] / res['df'] # MS 수동 계산
             
@@ -338,7 +341,7 @@ if up_file:
             # 컬럼 순서 재배치 및 반올림
             final_df = final_df[['변동원 (Source)', '제곱합 (SS)', '자유도 (df)', '평균제곱 (MS)', 'F값', '유의확률 (p)']]
             final_df = final_df.round(3)
-            final_df = final_df.fillna("") # 잔차 행의 F값, p값 등 빈칸 처리
+            final_df = final_df.fillna("") 
 
             # 모형 요약 정보 저장
             r2 = model.rsquared
