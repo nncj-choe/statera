@@ -290,9 +290,9 @@ if up_file:
         y = st.selectbox("검정 변수 (연속형)", num_cols)
         
         if st.button("통계 분석 실행"):
-            # 1. Centering (평균 차감) 로직 적용 (NIST High Precision 대응)
+            # 1. Centering (첫 번째 값을 뺌) 로직 적용 
             y_centered = f"_{y}_centered"
-            df[y_centered] = df[y] - df[y].mean()
+            df[y_centered] = df[y] - df[y].iloc(0)
 
             # 2. 중심화된 변수로 모델 적합
             model = ols(f'{y_centered} ~ C({g})', data=df).fit()
