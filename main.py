@@ -185,12 +185,33 @@ if up_file:
     final_df, p_val, interp, plot_img, assump_report = None, None, "", None, []
     anova_model_info = None  # ANOVA 요약 정보 저장을 위한 변수
     reg_anova_df = None # 회귀분석용 ANOVA 테이블
+    extra_metric = None # 추가 메트릭 (자기상관계수 등)
 
     # 기법별 상세 로직 구현
     if method == "기술통계":
         v = st.selectbox("분석할 변수 (연속형)", num_cols)
         if st.button("통계 분석 실행"):
-            final_df = df[[v]].describe().T.reset_index().round(2)
+            # 기본 기술통계량 계산
+            desc = df[[v]].describe().T.reset_index()
+            
+            # [Standardization] 컬럼명 한글 병기
+            final_df = desc.rename(columns={
+                'index': 'Variable (변수명)',
+                'count': 'N (사례수)',
+                'mean': 'Mean (평균)',
+                'std': 'SD (표준편차)',
+                'min': 'Min (최소)',
+                '25%': 'Q1 (25%)',
+                '50%': 'Median (중앙값)',
+                '75%': 'Q3 (75%)',
+                'max': 'Max (최대)'
+            }).round(4)
+            
+            # [NIST 검증용] 자기상관계수 (Autocorrelation Lag 1)
+            autocorr_val = df[v].autocorr(lag=1)
+            # 옵션 A: 결과표에는 넣지 않고, 별도 메트릭으로 하단 표시
+            extra_metric = {"label": "Autocorrelation Lag 1 (자기상관계수)", "value": f"{autocorr_val:.3f}"}
+
             skew = df[v].skew(); kurt = df[v].kurt()
             if abs(skew) < 3 and abs(kurt) < 10:
                 assump_report.append(f'<div class="assumption-pass">✅ 정규성 가정 충족: 왜도({skew:.2f})와 첨도({kurt:.2f})가 기준 이내입니다.</div>')
@@ -204,9 +225,9 @@ if up_file:
         if st.button("통계 분석 실행") and vs:
             res = []
             for c in vs:
-                counts = df[c].value_counts().reset_index(); counts.columns = ['범주', 'n']
-                counts['%'] = (counts['n'] / counts['n'].sum() * 100).round(1)
-                counts.insert(0, '변수명', c); res.append(counts)
+                counts = df[c].value_counts().reset_index(); counts.columns = ['Category (범주)', 'Frequency (빈도)']
+                counts['Percent (비율)'] = (counts['Frequency (빈도)'] / counts['Frequency (빈도)'].sum() * 100).round(1)
+                counts.insert(0, 'Variable (변수명)', c); res.append(counts)
             final_df = pd.concat(res)
             assump_report.append('<div class="assumption-pass">✅ 가정 검정 해당 없음: 빈도분석은 비모수적 방법으로 별도의 가정이 필요하지 않습니다.</div>')
             interp = "대상자의 일반적 분포를 확인하십시오."
@@ -221,6 +242,8 @@ if up_file:
                 assump_report.append(f'<div class="assumption-pass">✅ 기대빈도 가정 충족: 기대빈도 5 미만 셀이 {under_5_pct:.1f}%(20% 이하)입니다.</div>')
             else:
                 assump_report.append(f'<div class="assumption-fail">⚠️ 기대빈도 가정 위배: 20% 초과. (대안으로 Fisher의 정확 검정(Fisher\'s Exact Test) 사용 권장)</div>')
+            
+            # 카이제곱은 결과표 자체가 교차표(Cross-tab)이므로 컬럼명 변경이 애매함. 요약정보 제공.
             final_df = ct.astype(str) + " (" + (ct/ct.sum()*100).round(1).astype(str) + "%)"
             p_val = p; interp = f"📌 {r}와 {c} 간 연관성 유의확률: p={format_p(p)}"
 
@@ -234,7 +257,14 @@ if up_file:
             else:
                 assump_report.append(f'<div class="assumption-fail">⚠️ 정규성 가정 위배: p={sp:.3f} < .05. (대안으로 비모수 검정인 Wilcoxon Signed-Rank Test 사용 권장)</div>')
             stat, p = stats.ttest_1samp(data, ref_v); p_val = p
-            final_df = pd.DataFrame({"방법": [method], "t값": [stat], "df": [len(data)-1], "p값": [format_p(p)]})
+            
+            # [Standardization] 컬럼명 한글 병기
+            final_df = pd.DataFrame({
+                "Method (분석방법)": [method], 
+                "t Statistic (t값)": [stat], 
+                "df (자유도)": [len(data)-1], 
+                "p-value (유의확률)": [format_p(p)]
+            })
             interp = f"📌 평균과 기준값 간의 차이는 {'유의합니다' if p < 0.05 else '유의하지 않습니다'}."
 
     elif method == "독립표본 T-검정":
@@ -261,7 +291,13 @@ if up_file:
                     stat, p = stats.ttest_ind(g1, g2, equal_var=False)
 
                 p_val = p
-                final_df = pd.DataFrame({"집단": [gps[0], gps[1]], "N": [len(g1), len(g2)], "Mean": [g1.mean(), g2.mean()], "SD": [g1.std(), g2.std()]})
+                # [Standardization] 컬럼명 한글 병기
+                final_df = pd.DataFrame({
+                    "Group (집단)": [gps[0], gps[1]], 
+                    "N (사례수)": [len(g1), len(g2)], 
+                    "Mean (평균)": [g1.mean(), g2.mean()], 
+                    "SD (표준편차)": [g1.std(), g2.std()]
+                })
                 plt.figure(figsize=(5,4)); sns.boxplot(x=g, y=y, data=df); plot_img = get_plot_buffer()
                 interp = f"📌 두 집단 간 {y}의 평균 차이는 t={stat:.3f}, p={format_p(p)}로 통계적으로 {'유의합니다' if p < 0.05 else '유의하지 않습니다'}."
 
@@ -277,11 +313,12 @@ if up_file:
             
             stat, p = stats.ttest_rel(df[y1].dropna(), df[y2].dropna()); p_val = p
             
+            # [Standardization] 컬럼명 한글 병기
             final_df = pd.DataFrame({
-                "변수": [y1, y2], 
-                "Mean": [df[y1].mean(), df[y2].mean()], 
-                "t값": [f"{stat:.3f}", ""], 
-                "p값": [format_p(p), ""]
+                "Variable (변수)": [y1, y2], 
+                "Mean (평균)": [df[y1].mean(), df[y2].mean()], 
+                "t Statistic (t값)": [f"{stat:.3f}", ""], 
+                "p-value (유의확률)": [format_p(p), ""]
             })
             interp = f"📌 사전 대비 사후의 수치 변화는 {'유의합니다' if p < 0.05 else '유의하지 않습니다'}."
 
@@ -290,6 +327,7 @@ if up_file:
         y = st.selectbox("검정 변수 (연속형)", num_cols)
         
         if st.button("통계 분석 실행"):
+            # [Expert Patch] NIST 고정밀 검증 (Centering)
             y_centered = f"_{y}_centered"
             df[y_centered] = df[y] - df[y].iloc[0]
 
@@ -313,10 +351,10 @@ if up_file:
             if 'mean_sq' not in res.columns:
                 res['mean_sq'] = res['sum_sq'] / res['df']
             
-            p_val = res.iloc[0, 3]
+            p_val = res.iloc[0, 3] # p값 추출
             
             final_df = res.reset_index()
-            # 컬럼명 영문 + 한글 병기 (표준화)
+            # [Standardization] 컬럼명 한글 병기
             final_df = final_df.rename(columns={
                 'index': 'Source (변동원)',
                 'sum_sq': 'Sum of Squares (제곱합)',
@@ -375,7 +413,8 @@ if up_file:
             else:
                 assump_report.append(f'<div class="assumption-fail">⚠️ 신뢰도 낮음: Cronbach Alpha {alpha:.3f} (기준 0.7 미만). 문항 제거 또는 수정 필요.</div>')
             
-            final_df = pd.DataFrame({"측정 지표": ["Cronbach α"], "수치": [f"{alpha:.3f}"]})
+            # [Standardization] 컬럼명 한글 병기
+            final_df = pd.DataFrame({"Measure (측정지표)": ["Cronbach α"], "Value (수치)": [f"{alpha:.3f}"]})
             interp = f"📌 신뢰도 계수는 {alpha:.3f}로 확인되었습니다."
 
     elif method == "회귀분석":
@@ -398,7 +437,7 @@ if up_file:
                 else:
                       assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 독립성 주의: Durbin-Watson {dw:.2f} (시계열 분석 등 고려 필요)</div>')
                 
-                # [NEW] 회귀분석용 ANOVA 테이블 (영문+한글 병기)
+                # [Standardization] 회귀분석용 ANOVA 테이블 (영문+한글 병기)
                 anova_data = {
                     "Source (변동원)": ["Regression (회귀)", "Residual (잔차)", "Total (합계)"],
                     "df (자유도)": [model.df_model, model.df_resid, model.df_model + model.df_resid],
@@ -409,10 +448,10 @@ if up_file:
                 }
                 reg_anova_df = pd.DataFrame(anova_data)
 
-                # 회귀계수 결과 테이블 (컬럼명 영문+한글)
+                # [Standardization] 회귀계수 결과 테이블 (컬럼명 영문+한글)
                 final_df = pd.DataFrame({
                     "Variable (변수명)": ["const"] + list(xs),
-                    "B (비표준화 계수)": model.params,
+                    "Coef (비표준화 계수)": model.params,
                     "SE (표준오차)": model.bse,
                     "t (t값)": model.tvalues,
                     "p (유의확률)": model.pvalues
@@ -445,16 +484,17 @@ if up_file:
                 conf = model.conf_int()
                 conf.columns = ['Lower CI', 'Upper CI']
                 
+                # [Standardization] 로지스틱 결과표 컬럼명
                 final_df = pd.DataFrame({
-                    "B": params,
-                    "SE": model.bse,
-                    "OR": np.exp(params),
+                    "Coef (비표준화 계수)": params,
+                    "SE (표준오차)": model.bse,
+                    "OR (오즈비)": np.exp(params),
                     "95% CI Lower": np.exp(conf['Lower CI']),
                     "95% CI Upper": np.exp(conf['Upper CI']),
-                    "p": model.pvalues
+                    "p (유의확률)": model.pvalues
                 }).round(3)
-                final_df = final_df.reset_index().rename(columns={'index': '변수명'})
-                final_df['p'] = final_df['p'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
+                final_df = final_df.reset_index().rename(columns={'index': 'Variable (변수명)'})
+                final_df['p (유의확률)'] = final_df['p (유의확률)'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
                 
                 sig_vars = []
                 for var in xs:
@@ -480,7 +520,7 @@ if up_file:
         col_main_L, col_main_R = st.columns([1.3, 1]) 
         
         with col_main_L:
-            # [추가] 회귀분석일 경우 ANOVA 테이블 먼저 보여주기 (NIST 스타일)
+            # [추가] 회귀분석일 경우 ANOVA 테이블 먼저 보여주기
             if reg_anova_df is not None:
                 st.markdown("##### 📊 분산분석표 (ANOVA Table)")
                 st.dataframe(reg_anova_df, use_container_width=True, hide_index=True)
@@ -511,6 +551,15 @@ if up_file:
             </div>
             """, unsafe_allow_html=True)
             
+            # [추가] 추가 메트릭 표시 (예: 자기상관계수 - 옵션 A)
+            if extra_metric:
+                st.markdown(f"""
+                <div style="background-color: #f0fdfa; padding: 15px; border-radius: 10px; border: 1px solid #ccfbf1; margin-top: 10px;">
+                    <div style="font-size: 0.9rem; color: #0f766e; font-weight: 700;">📌 {extra_metric['label']}</div>
+                    <div style="font-size: 1.2rem; color: #115e59; font-weight: 800;">{extra_metric['value']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
             st.download_button(
                 label="📄 워드 리포트 다운로드",
                 data=create_pro_report(method, final_df, interp, "통계 수치를 논문에 인용하세요.", plot_b=plot_img, assump="\n".join(assump_report)),
