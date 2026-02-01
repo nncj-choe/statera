@@ -89,7 +89,6 @@ def create_pro_report(m_name, r_df, interpretation, guide, plot_b=None, assump="
     doc.add_heading(f'STATERA Report: {m_name}', 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
     if assump: 
         doc.add_heading('1. Assumption Checks', level=1)
-        # HTML 태그 제거 후 텍스트만 저장
         clean_assump = assump.replace('<div class="assumption-pass">', '').replace('<div class="assumption-fail">', '').replace('</div>', '')
         doc.add_paragraph(clean_assump).italic = True
     doc.add_heading('2. Statistical Results', level=1)
@@ -315,9 +314,11 @@ if up_file:
             else:
                 assump_report.append(f'<div class="assumption-fail">⚠️ 등분산성 위배: p={lp:.3f}. (대안으로 Welch ANOVA 사용 권장)</div>')
 
-            # 4. 결과표 생성 (표준 논문 양식)
+            # 4. 결과표 생성 (표준 논문 양식으로 변환)
             res = anova_lm(model, typ=2)
-            res['mean_sq'] = res['sum_sq'] / res['df'] # MS 수동 계산
+            # MS 컬럼 수동 계산 (KeyError 방지)
+            if 'mean_sq' not in res.columns:
+                res['mean_sq'] = res['sum_sq'] / res['df']
             
             p_val = res.iloc[0, 3] # p값 추출
             
@@ -417,7 +418,7 @@ if up_file:
                 final_df = final_df.reset_index().rename(columns={'index': '변수명'})
                 final_df['p'] = final_df['p'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
                 
-                # [수정] 선형 회귀분석 변수별 해석 추가
+                # [수정] 선형 회귀분석 해석 로직 개선 (NIST 대응)
                 sig_vars = []
                 for var in xs:
                     if var in model.pvalues and model.pvalues[var] < 0.05:
@@ -426,7 +427,16 @@ if up_file:
                         sig_vars.append(f"<b>{var}</b>({effect})")
                 
                 var_msg = ("또한, " + ", ".join(sig_vars) + "을 미치는 것으로 나타났습니다.") if sig_vars else "유의한 독립변수는 발견되지 않았습니다."
-                interp = f"📌 모델 설명력(Adj R²)은 {model.rsquared_adj:.3f}이며, 모형은 유의합니다(p={format_p(p_val)}). {var_msg}"
+                
+                # R2, Adj-R2 동시 출력 및 p-value 해석 분기
+                r2 = model.rsquared
+                adj_r2 = model.rsquared_adj
+                sig_text = "유의합니다" if p_val < 0.05 else "유의하지 않습니다"
+                
+                interp = (
+                    f"📌 모델의 설명력(R²)은 {r2:.3f}, 수정된 설명력(Adj R²)은 {adj_r2:.3f}입니다. "
+                    f"통계적으로 이 모형은 {sig_text}(p={format_p(p_val)}). {var_msg}"
+                )
 
             else: # 로지스틱
                 X = sm.add_constant(df[xs]); model = sm.Logit(df[y], X).fit(disp=False); p_val = model.llr_pvalue
