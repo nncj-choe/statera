@@ -285,16 +285,31 @@ if up_file:
             })
             interp = f"📌 사전 대비 사후의 수치 변화는 {'유의합니다' if p < 0.05 else '유의하지 않습니다'}."
 
-    elif method == "분산분석(ANOVA)":
+elif method == "분산분석(ANOVA)":
         g = st.selectbox("집단 변수 (범주형: 3집단 이상)", all_cols)
         y = st.selectbox("검정 변수 (연속형)", num_cols)
+        
         if st.button("통계 분석 실행"):
-            model = ols(f'{y} ~ C({g})', data=df).fit()
+            # -------------------------------------------------------
+            # [Expert Patch] NIST 고정밀 검증을 위한 Centering Logic 적용
+            # 거대 수치(10^12 등) 입력 시 부동소수점 오차 방지를 위해 평균 차감 수행
+            # 분산분석은 '차이'를 보므로 중심화(Centering)를 해도 F값은 불변함.
+            # -------------------------------------------------------
+            y_centered = f"_{y}_centered"  # 임시 변수명 생성
+            df[y_centered] = df[y] - df[y].mean()
+
+            # 수정된 부분: 원본 y 대신 y_centered를 모델에 투입
+            model = ols(f'{y_centered} ~ C({g})', data=df).fit()
+            
+            # -------------------------------------------------------
+            
             resid = model.resid; _, sp = stats.shapiro(resid)
+            
+            # NIST 데이터 같은 인공 데이터는 정규성 p=0.000이 나올 수 있으므로 안내 메시지 보완
             if sp > 0.05:
                 assump_report.append(f'<div class="assumption-pass">✅ 잔차 정규성 충족: Shapiro-Wilk p={sp:.3f}</div>')
             else:
-                assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 정규성 위배: p={sp:.3f}. (대안으로 Kruskal-Wallis Test 사용 권장)</div>')
+                assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 정규성 위배: p={format_p(sp)}. (NIST 등 인공 데이터가 아니라면 Kruskal-Wallis 권장)</div>')
             
             grps = [df[df[g] == k][y].dropna() for k in df[g].unique()]
             _, lp = stats.levene(*grps)
@@ -305,10 +320,15 @@ if up_file:
 
             res = anova_lm(model, typ=2); p_val = res.iloc[0,3]
             final_df = res.reset_index().round(3)
+            
+            # 결과 테이블에 임시 변수명(_centered)이 노출되지 않도록 인덱스명 복원
+            final_df['index'] = final_df['index'].replace({f'C({g})': g, 'Residual': 'Residual'})
+
             if p_val < 0.05:
                 tukey = pairwise_tukeyhsd(df[y].dropna(), df[g].dropna())
                 st.info("💡 사후검정(Tukey HSD) 결과가 하단에 출력됩니다.")
                 st.text(str(tukey))
+            
             interp = f"📌 집단 간 차이 유의성 p={format_p(p_val)}"
 
     elif method == "상관분석":
