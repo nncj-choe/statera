@@ -184,6 +184,7 @@ if up_file:
     st.markdown('<div class="section-title"><span class="step-badge">02</span> 분석 변수 설정 및 실행</div>', unsafe_allow_html=True)
     final_df, p_val, interp, plot_img, assump_report = None, None, "", None, []
     anova_model_info = None  # ANOVA 요약 정보 저장을 위한 변수
+    reg_anova_df = None # 회귀분석용 ANOVA 테이블
 
     # 기법별 상세 로직 구현
     if method == "기술통계":
@@ -289,17 +290,11 @@ if up_file:
         y = st.selectbox("검정 변수 (연속형)", num_cols)
         
         if st.button("통계 분석 실행"):
-            # -------------------------------------------------------
-            # [Expert Patch] NIST 고정밀 검증을 위한 Centering Logic 적용
-            # -------------------------------------------------------
             y_centered = f"_{y}_centered"
-            # 평균 대신 '첫 번째 행의 값(iloc[0])'을 빼서 오차를 원천 차단합니다.
             df[y_centered] = df[y] - df[y].iloc[0]
 
-            # 중심화된 변수로 모델 적합
             model = ols(f'{y_centered} ~ C({g})', data=df).fit()
             
-            # 3. 가정 검정 및 결과 산출
             resid = model.resid; _, sp = stats.shapiro(resid)
             
             if sp > 0.05:
@@ -314,16 +309,13 @@ if up_file:
             else:
                 assump_report.append(f'<div class="assumption-fail">⚠️ 등분산성 위배: p={lp:.3f}. (대안으로 Welch ANOVA 사용 권장)</div>')
 
-            # 4. 결과표 생성 (표준 논문 양식으로 변환)
             res = anova_lm(model, typ=2)
-            # MS 컬럼 수동 계산 (KeyError 방지)
             if 'mean_sq' not in res.columns:
                 res['mean_sq'] = res['sum_sq'] / res['df']
             
-            p_val = res.iloc[0, 3] # p값 추출
+            p_val = res.iloc[0, 3]
             
             final_df = res.reset_index()
-            # 컬럼명 한글화 (표준 용어)
             final_df = final_df.rename(columns={
                 'index': '변동원 (Source)',
                 'sum_sq': '제곱합 (SS)',
@@ -333,18 +325,15 @@ if up_file:
                 'PR(>F)': '유의확률 (p)'
             })
             
-            # 행 이름 다듬기
             final_df['변동원 (Source)'] = final_df['변동원 (Source)'].replace({
                 f'C({g})': f'{g} (집단 간)', 
                 'Residual': '잔차 (집단 내)'
             })
 
-            # 컬럼 순서 재배치 및 반올림
             final_df = final_df[['변동원 (Source)', '제곱합 (SS)', '자유도 (df)', '평균제곱 (MS)', 'F값', '유의확률 (p)']]
             final_df = final_df.round(3)
             final_df = final_df.fillna("") 
 
-            # 모형 요약 정보 저장
             r2 = model.rsquared
             rmse = np.sqrt(model.mse_resid)
             anova_model_info = f"- **설명력 (R²):** {r2:.3f} (전체 변동의 {r2*100:.1f}% 설명)\n- **잔차 표준편차 (Root MSE):** {rmse:.3f}"
@@ -408,7 +397,18 @@ if up_file:
                 else:
                       assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 독립성 주의: Durbin-Watson {dw:.2f} (시계열 분석 등 고려 필요)</div>')
                 
-                # 결과 테이블 생성
+                # [NEW] 회귀분석용 ANOVA 테이블 생성 (NIST 검증용)
+                anova_data = {
+                    "변동원 (Source)": ["회귀 (Regression)", "잔차 (Residual)", "합계 (Total)"],
+                    "자유도 (df)": [model.df_model, model.df_resid, model.df_model + model.df_resid],
+                    "제곱합 (SS)": [model.ess, model.ssr, model.ess + model.ssr],
+                    "평균제곱 (MS)": [model.mse_model, model.mse_resid, ""],
+                    "F값": [model.fvalue, "", ""],
+                    "유의확률 (p)": [format_p(model.f_pvalue), "", ""]
+                }
+                reg_anova_df = pd.DataFrame(anova_data)
+
+                # 회귀계수 결과 테이블
                 final_df = pd.DataFrame({
                     "B": model.params,
                     "SE": model.bse,
@@ -418,7 +418,6 @@ if up_file:
                 final_df = final_df.reset_index().rename(columns={'index': '변수명'})
                 final_df['p'] = final_df['p'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
                 
-                # [수정] 선형 회귀분석 해석 로직 개선 (NIST 대응)
                 sig_vars = []
                 for var in xs:
                     if var in model.pvalues and model.pvalues[var] < 0.05:
@@ -428,7 +427,6 @@ if up_file:
                 
                 var_msg = ("또한, " + ", ".join(sig_vars) + "을 미치는 것으로 나타났습니다.") if sig_vars else "유의한 독립변수는 발견되지 않았습니다."
                 
-                # R2, Adj-R2 동시 출력 및 p-value 해석 분기
                 r2 = model.rsquared
                 adj_r2 = model.rsquared_adj
                 sig_text = "유의합니다" if p_val < 0.05 else "유의하지 않습니다"
@@ -456,7 +454,6 @@ if up_file:
                 final_df = final_df.reset_index().rename(columns={'index': '변수명'})
                 final_df['p'] = final_df['p'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
                 
-                # [수정] 로지스틱 회귀분석 변수별 해석 추가 (OR 기준)
                 sig_vars = []
                 for var in xs:
                     if var in model.pvalues and model.pvalues[var] < 0.05:
@@ -481,6 +478,12 @@ if up_file:
         col_main_L, col_main_R = st.columns([1.3, 1]) 
         
         with col_main_L:
+            # [추가] 회귀분석일 경우 ANOVA 테이블 먼저 보여주기 (NIST 스타일)
+            if reg_anova_df is not None:
+                st.markdown("##### 📊 분산분석표 (ANOVA Table)")
+                st.dataframe(reg_anova_df, use_container_width=True, hide_index=True)
+                st.markdown("---")
+
             st.markdown("##### 📋 통계량 상세표")
             st.dataframe(final_df, use_container_width=True, hide_index=True)
             
