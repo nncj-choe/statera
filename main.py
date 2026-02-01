@@ -162,7 +162,6 @@ if up_file:
     elif "차이" in group: 
         m_list = ["단일표본 T-검정", "독립표본 T-검정", "대응표본 T-검정", "분산분석(ANOVA)"]
     elif "관계" in group: 
-        # [수정] 카이제곱 검정을 가장 앞으로 이동
         m_list = ["카이제곱 검정", "상관분석", "회귀분석"]
     else: 
         m_list = ["신뢰도 분석"]
@@ -185,6 +184,7 @@ if up_file:
     # Step 02: 변수 선택 및 실행
     st.markdown('<div class="section-title"><span class="step-badge">02</span> 분석 변수 설정 및 실행</div>', unsafe_allow_html=True)
     final_df, p_val, interp, plot_img, assump_report = None, None, "", None, []
+    anova_model_info = None  # ANOVA 요약 정보 저장을 위한 변수
 
     # 기법별 상세 로직 구현
     if method == "기술통계":
@@ -248,9 +248,9 @@ if up_file:
                 
                 _, sp1 = stats.shapiro(g1); _, sp2 = stats.shapiro(g2)
                 if sp1 > 0.05 and sp2 > 0.05:
-                     assump_report.append(f'<div class="assumption-pass">✅ 정규성 가정 충족: 두 집단 모두 정규분포를 따릅니다.</div>')
+                      assump_report.append(f'<div class="assumption-pass">✅ 정규성 가정 충족: 두 집단 모두 정규분포를 따릅니다.</div>')
                 else:
-                     assump_report.append(f'<div class="assumption-fail">⚠️ 정규성 가정 위배: 한 집단 이상이 정규성을 만족하지 않습니다. (대안으로 Mann-Whitney U Test 사용 권장)</div>')
+                      assump_report.append(f'<div class="assumption-fail">⚠️ 정규성 가정 위배: 한 집단 이상이 정규성을 만족하지 않습니다. (대안으로 Mann-Whitney U Test 사용 권장)</div>')
 
                 _, lp = stats.levene(g1, g2)
                 if lp > 0.05:
@@ -290,22 +290,16 @@ if up_file:
         y = st.selectbox("검정 변수 (연속형)", num_cols)
         
         if st.button("통계 분석 실행"):
-            # -------------------------------------------------------
-            # [Expert Patch] NIST 고정밀 검증을 위한 Centering Logic 적용
-            # 거대 수치(10^12 등) 입력 시 부동소수점 오차 방지를 위해 평균 차감 수행
-            # 분산분석은 '차이'를 보므로 중심화(Centering)를 해도 F값은 불변함.
-            # -------------------------------------------------------
-            y_centered = f"_{y}_centered"  # 임시 변수명 생성
+            # 1. Centering (평균 차감) 로직 적용 (NIST High Precision 대응)
+            y_centered = f"_{y}_centered"
             df[y_centered] = df[y] - df[y].mean()
 
-            # 수정된 부분: 원본 y 대신 y_centered를 모델에 투입
+            # 2. 중심화된 변수로 모델 적합
             model = ols(f'{y_centered} ~ C({g})', data=df).fit()
             
-            # -------------------------------------------------------
-            
+            # 3. 가정 검정 및 결과 산출
             resid = model.resid; _, sp = stats.shapiro(resid)
             
-            # NIST 데이터 같은 인공 데이터는 정규성 p=0.000이 나올 수 있으므로 안내 메시지 보완
             if sp > 0.05:
                 assump_report.append(f'<div class="assumption-pass">✅ 잔차 정규성 충족: Shapiro-Wilk p={sp:.3f}</div>')
             else:
@@ -318,11 +312,38 @@ if up_file:
             else:
                 assump_report.append(f'<div class="assumption-fail">⚠️ 등분산성 위배: p={lp:.3f}. (대안으로 Welch ANOVA 사용 권장)</div>')
 
-            res = anova_lm(model, typ=2); p_val = res.iloc[0,3]
-            final_df = res.reset_index().round(3)
+            # 4. 결과표 생성 (표준 논문 양식으로 변환)
+            res = anova_lm(model, typ=2)
+            res['mean_sq'] = res['sum_sq'] / res['df'] # MS 수동 계산
             
-            # 결과 테이블에 임시 변수명(_centered)이 노출되지 않도록 인덱스명 복원
-            final_df['index'] = final_df['index'].replace({f'C({g})': g, 'Residual': 'Residual'})
+            p_val = res.iloc[0, 3] # p값 추출
+            
+            final_df = res.reset_index()
+            # 컬럼명 한글화 (표준 용어)
+            final_df = final_df.rename(columns={
+                'index': '변동원 (Source)',
+                'sum_sq': '제곱합 (SS)',
+                'df': '자유도 (df)',
+                'mean_sq': '평균제곱 (MS)',
+                'F': 'F값',
+                'PR(>F)': '유의확률 (p)'
+            })
+            
+            # 행 이름 다듬기
+            final_df['변동원 (Source)'] = final_df['변동원 (Source)'].replace({
+                f'C({g})': f'{g} (집단 간)', 
+                'Residual': '잔차 (집단 내)'
+            })
+
+            # 컬럼 순서 재배치 및 반올림
+            final_df = final_df[['변동원 (Source)', '제곱합 (SS)', '자유도 (df)', '평균제곱 (MS)', 'F값', '유의확률 (p)']]
+            final_df = final_df.round(3)
+            final_df = final_df.fillna("") # 잔차 행의 F값, p값 등 빈칸 처리
+
+            # 모형 요약 정보 저장
+            r2 = model.rsquared
+            rmse = np.sqrt(model.mse_resid)
+            anova_model_info = f"- **설명력 (R²):** {r2:.3f} (전체 변동의 {r2*100:.1f}% 설명)\n- **잔차 표준편차 (Root MSE):** {rmse:.3f}"
 
             if p_val < 0.05:
                 tukey = pairwise_tukeyhsd(df[y].dropna(), df[g].dropna())
@@ -379,9 +400,9 @@ if up_file:
                     assump_report.append(f'<div class="assumption-fail">⚠️ 다중공선성 경고: 최대 VIF {max_vif:.2f} (변수 제거 또는 차원 축소 고려 권장)</div>')
                 dw = durbin_watson(model.resid)
                 if 1.5 < dw < 2.5:
-                     assump_report.append(f'<div class="assumption-pass">✅ 잔차 독립성 충족: Durbin-Watson {dw:.2f} (2에 근접)</div>')
+                      assump_report.append(f'<div class="assumption-pass">✅ 잔차 독립성 충족: Durbin-Watson {dw:.2f} (2에 근접)</div>')
                 else:
-                     assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 독립성 주의: Durbin-Watson {dw:.2f} (시계열 분석 등 고려 필요)</div>')
+                      assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 독립성 주의: Durbin-Watson {dw:.2f} (시계열 분석 등 고려 필요)</div>')
                 
                 # 결과 테이블 생성
                 final_df = pd.DataFrame({
@@ -449,6 +470,10 @@ if up_file:
         with col_main_L:
             st.markdown("##### 📋 통계량 상세표")
             st.dataframe(final_df, use_container_width=True, hide_index=True)
+            
+            # [추가] ANOVA 모형 요약 정보 표시
+            if anova_model_info:
+                 st.info(f"📊 모형 요약 정보\n{anova_model_info}")
             
         with col_main_R:
             st.markdown("##### 💡 핵심 결론")
