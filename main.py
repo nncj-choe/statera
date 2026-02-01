@@ -316,21 +316,22 @@ if up_file:
             p_val = res.iloc[0, 3]
             
             final_df = res.reset_index()
+            # 컬럼명 영문 + 한글 병기 (표준화)
             final_df = final_df.rename(columns={
-                'index': '변동원 (Source)',
-                'sum_sq': '제곱합 (SS)',
-                'df': '자유도 (df)',
-                'mean_sq': '평균제곱 (MS)',
-                'F': 'F값',
-                'PR(>F)': '유의확률 (p)'
+                'index': 'Source (변동원)',
+                'sum_sq': 'Sum of Squares (제곱합)',
+                'df': 'df (자유도)',
+                'mean_sq': 'Mean Square (평균제곱)',
+                'F': 'F Statistic (F값)',
+                'PR(>F)': 'Significance (유의확률)'
             })
             
-            final_df['변동원 (Source)'] = final_df['변동원 (Source)'].replace({
+            final_df['Source (변동원)'] = final_df['Source (변동원)'].replace({
                 f'C({g})': f'{g} (집단 간)', 
-                'Residual': '잔차 (집단 내)'
+                'Residual': 'Residual (잔차)'
             })
 
-            final_df = final_df[['변동원 (Source)', '제곱합 (SS)', '자유도 (df)', '평균제곱 (MS)', 'F값', '유의확률 (p)']]
+            final_df = final_df[['Source (변동원)', 'Sum of Squares (제곱합)', 'df (자유도)', 'Mean Square (평균제곱)', 'F Statistic (F값)', 'Significance (유의확률)']]
             final_df = final_df.round(3)
             final_df = final_df.fillna("") 
 
@@ -397,26 +398,27 @@ if up_file:
                 else:
                       assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 독립성 주의: Durbin-Watson {dw:.2f} (시계열 분석 등 고려 필요)</div>')
                 
-                # [NEW] 회귀분석용 ANOVA 테이블 생성 (NIST 검증용)
+                # [NEW] 회귀분석용 ANOVA 테이블 (영문+한글 병기)
                 anova_data = {
-                    "변동원 (Source)": ["회귀 (Regression)", "잔차 (Residual)", "합계 (Total)"],
-                    "자유도 (df)": [model.df_model, model.df_resid, model.df_model + model.df_resid],
-                    "제곱합 (SS)": [model.ess, model.ssr, model.ess + model.ssr],
-                    "평균제곱 (MS)": [model.mse_model, model.mse_resid, ""],
-                    "F값": [model.fvalue, "", ""],
-                    "유의확률 (p)": [format_p(model.f_pvalue), "", ""]
+                    "Source (변동원)": ["Regression (회귀)", "Residual (잔차)", "Total (합계)"],
+                    "df (자유도)": [model.df_model, model.df_resid, model.df_model + model.df_resid],
+                    "Sum of Squares (제곱합)": [model.ess, model.ssr, model.ess + model.ssr],
+                    "Mean Square (평균제곱)": [model.mse_model, model.mse_resid, ""],
+                    "F Statistic (F값)": [model.fvalue, "", ""],
+                    "Significance (유의확률)": [format_p(model.f_pvalue), "", ""]
                 }
                 reg_anova_df = pd.DataFrame(anova_data)
 
-                # 회귀계수 결과 테이블
+                # 회귀계수 결과 테이블 (컬럼명 영문+한글)
                 final_df = pd.DataFrame({
-                    "B": model.params,
-                    "SE": model.bse,
-                    "t": model.tvalues,
-                    "p": model.pvalues
+                    "Variable (변수명)": ["const"] + list(xs),
+                    "B (비표준화 계수)": model.params,
+                    "SE (표준오차)": model.bse,
+                    "t (t값)": model.tvalues,
+                    "p (유의확률)": model.pvalues
                 }).round(3)
-                final_df = final_df.reset_index().rename(columns={'index': '변수명'})
-                final_df['p'] = final_df['p'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
+                final_df = final_df.reset_index(drop=True)
+                final_df['p (유의확률)'] = final_df['p (유의확률)'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
                 
                 sig_vars = []
                 for var in xs:
