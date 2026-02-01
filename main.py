@@ -285,7 +285,7 @@ if up_file:
             })
             interp = f"📌 사전 대비 사후의 수치 변화는 {'유의합니다' if p < 0.05 else '유의하지 않습니다'}."
 
-elif method == "분산분석(ANOVA)":
+    elif method == "분산분석(ANOVA)":
         g = st.selectbox("집단 변수 (범주형: 3집단 이상)", all_cols)
         y = st.selectbox("검정 변수 (연속형)", num_cols)
         
