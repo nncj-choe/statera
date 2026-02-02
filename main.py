@@ -19,7 +19,7 @@ from docx.oxml.ns import qn
 # -----------------------------------------------------------------------------
 # 1. UI 스타일링 및 테마 설정
 # -----------------------------------------------------------------------------
-st.set_page_config(page_title="STATERA: Edu-Statistical Engine", page_icon="🎓", layout="wide")
+st.set_page_config(page_title="STATERA", page_icon="🎓", layout="wide")
 
 plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['axes.unicode_minus'] = False
