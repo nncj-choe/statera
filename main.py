@@ -19,7 +19,7 @@ from docx.oxml.ns import qn
 # -----------------------------------------------------------------------------
 # 1. UI 스타일링 및 테마 설정
 # -----------------------------------------------------------------------------
-st.set_page_config(page_title="STATERA", page_icon="🎓", layout="wide")
+st.set_page_config(page_title="STATERA: Edu-Statistical Engine", page_icon="🎓", layout="wide")
 
 plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['axes.unicode_minus'] = False
@@ -66,7 +66,6 @@ st.markdown(f"""
 # 2. 통계 멘토 가이드 데이터 및 유틸리티
 # -----------------------------------------------------------------------------
 def format_p(p): return "<.001" if p < .001 else f"{p:.3f}"
-def get_stars(p): return "***" if p < .001 else "**" if p < .01 else "*" if p < .05 else ""
 def get_plot_buffer():
     buf = io.BytesIO(); plt.savefig(buf, format='png', bbox_inches='tight', dpi=300); buf.seek(0); plt.close(); return buf
 
@@ -91,14 +90,20 @@ def create_pro_report(m_name, r_df, interpretation, guide, plot_b=None, assump="
         doc.add_heading('1. Assumption Checks', level=1)
         clean_assump = assump.replace('<div class="assumption-pass">', '').replace('<div class="assumption-fail">', '').replace('</div>', '')
         doc.add_paragraph(clean_assump).italic = True
+    
     doc.add_heading('2. Statistical Results', level=1)
-    t = doc.add_table(r_df.shape[0]+1, r_df.shape[1]); t.style = 'Table Grid'
-    for j, c in enumerate(r_df.columns): t.cell(0,j).text = str(c)
-    for i in range(r_df.shape[0]):
-        for j in range(r_df.shape[1]): t.cell(i+1,j).text = str(r_df.values[i,j])
+    if r_df is not None:
+        t = doc.add_table(r_df.shape[0]+1, r_df.shape[1]); t.style = 'Table Grid'
+        for j, c in enumerate(r_df.columns): t.cell(0,j).text = str(c)
+        for i in range(r_df.shape[0]):
+            for j in range(r_df.shape[1]): t.cell(i+1,j).text = str(r_df.values[i,j])
+            
     if plot_b: doc.add_heading('3. Visualization', level=1); doc.add_picture(plot_b, width=Inches(4.5))
-    doc.add_heading('4. AI Interpretation', level=1); doc.add_paragraph(interpretation)
-    doc.add_heading('5. Thesis Writing Guide', level=1); doc.add_paragraph(guide)
+    
+    doc.add_heading('4. Writing Guide (APA Style)', level=1)
+    doc.add_paragraph("※ This guide serves as a scaffold for your manuscript. Please verify and refine.")
+    doc.add_paragraph(interpretation)
+    
     bio = io.BytesIO(); doc.save(bio); bio.seek(0); return bio
 
 # -----------------------------------------------------------------------------
@@ -109,7 +114,7 @@ with st.sidebar:
     st.caption(ACRONYM_FULL)
     st.markdown("---")
     st.markdown("### 🚧 Research Beta Version")
-    st.info("본 서비스는 연구 데이터 분석의 진입 장벽을 낮추기 위해 개발된 웹 기반 통계 솔루션입니다. 현재 분석 알고리즘의 타당도 검증 절차를 진행 중입니다.")
+    st.info("본 서비스는 연구 데이터 분석의 진입 장벽을 낮추기 위해 개발된 웹 기반 통계 학습 솔루션입니다. 현재 분석 알고리즘의 타당도 검증 절차를 진행 중입니다.")
     st.markdown("---")
     st.markdown("### 📬 Contact & Feedback")
     st.write("오류 제보 및 기능 제안은 언제나 환영합니다.")
@@ -141,10 +146,14 @@ st.markdown(f"""
 up_file = st.file_uploader("파일을 업로드하여 분석을 시작하십시오.", type=["xlsx", "csv"], label_visibility="collapsed")
 
 if up_file:
-    df = pd.read_excel(up_file) if up_file.name.endswith('xlsx') else pd.read_csv(up_file)
-    num_cols = df.select_dtypes(include=[np.number]).columns
-    all_cols = df.columns
-    st.success(f"데이터 로드 완료: 분석 대상 사례 수 N={len(df)}")
+    try:
+        df = pd.read_excel(up_file) if up_file.name.endswith('xlsx') else pd.read_csv(up_file)
+        num_cols = df.select_dtypes(include=[np.number]).columns
+        all_cols = df.columns
+        st.success(f"데이터 로드 완료: 분석 대상 사례 수 N={len(df)}")
+    except Exception as e:
+        st.error(f"데이터 로드 중 오류가 발생했습니다: {e}")
+        st.stop()
 
     # Step 01: 분석 기법 선택
     st.markdown('<div class="section-title"><span class="step-badge">01</span> 연구 목적에 따른 분석 기법 선택</div>', unsafe_allow_html=True)
@@ -209,7 +218,6 @@ if up_file:
             
             # [NIST 검증용] 자기상관계수 (Autocorrelation Lag 1)
             autocorr_val = df[v].autocorr(lag=1)
-            # 옵션 A: 결과표에는 넣지 않고, 별도 메트릭으로 하단 표시
             extra_metric = {"label": "Autocorrelation Lag 1 (자기상관계수)", "value": f"{autocorr_val:.3f}"}
 
             skew = df[v].skew(); kurt = df[v].kurt()
@@ -243,7 +251,6 @@ if up_file:
             else:
                 assump_report.append(f'<div class="assumption-fail">⚠️ 기대빈도 가정 위배: 20% 초과. (대안으로 Fisher의 정확 검정(Fisher\'s Exact Test) 사용 권장)</div>')
             
-            # 카이제곱은 결과표 자체가 교차표(Cross-tab)이므로 컬럼명 변경이 애매함. 요약정보 제공.
             final_df = ct.astype(str) + " (" + (ct/ct.sum()*100).round(1).astype(str) + "%)"
             p_val = p; interp = f"📌 {r}와 {c} 간 연관성 유의확률: p={format_p(p)}"
 
@@ -258,7 +265,6 @@ if up_file:
                 assump_report.append(f'<div class="assumption-fail">⚠️ 정규성 가정 위배: p={sp:.3f} < .05. (대안으로 비모수 검정인 Wilcoxon Signed-Rank Test 사용 권장)</div>')
             stat, p = stats.ttest_1samp(data, ref_v); p_val = p
             
-            # [Standardization] 컬럼명 한글 병기
             final_df = pd.DataFrame({
                 "Method (분석방법)": [method], 
                 "t Statistic (t값)": [stat], 
@@ -291,7 +297,6 @@ if up_file:
                     stat, p = stats.ttest_ind(g1, g2, equal_var=False)
 
                 p_val = p
-                # [Standardization] 컬럼명 한글 병기
                 final_df = pd.DataFrame({
                     "Group (집단)": [gps[0], gps[1]], 
                     "N (사례수)": [len(g1), len(g2)], 
@@ -305,22 +310,30 @@ if up_file:
         y1 = st.selectbox("사전 변수 (연속형)", num_cols)
         y2 = st.selectbox("사후 변수 (연속형)", num_cols)
         if st.button("통계 분석 실행"):
-            diff = df[y2] - df[y1]; _, sp = stats.shapiro(diff.dropna())
-            if sp > 0.05:
-                assump_report.append(f'<div class="assumption-pass">✅ 차이의 정규성 충족: Shapiro-Wilk 검정(p={sp:.3f} > .05)을 만족합니다.</div>')
+            # [CRITICAL UPDATE] Listwise Deletion for Paired Data (SPSS Logic)
+            temp_df = df[[y1, y2]].dropna()
+            
+            if len(temp_df) < 2:
+                st.error("분석 가능한 유효 케이스가 부족합니다 (N < 2). 결측치를 확인하십시오.")
             else:
-                assump_report.append(f'<div class="assumption-fail">⚠️ 차이의 정규성 위배: p={sp:.3f} < .05. (대안으로 비모수 검정인 Wilcoxon Signed-Rank Test 사용 권장)</div>')
-            
-            stat, p = stats.ttest_rel(df[y1].dropna(), df[y2].dropna()); p_val = p
-            
-            # [Standardization] 컬럼명 한글 병기
-            final_df = pd.DataFrame({
-                "Variable (변수)": [y1, y2], 
-                "Mean (평균)": [df[y1].mean(), df[y2].mean()], 
-                "t Statistic (t값)": [f"{stat:.3f}", ""], 
-                "p-value (유의확률)": [format_p(p), ""]
-            })
-            interp = f"📌 사전 대비 사후의 수치 변화는 {'유의합니다' if p < 0.05 else '유의하지 않습니다'}."
+                diff = temp_df[y2] - temp_df[y1]
+                _, sp = stats.shapiro(diff)
+                if sp > 0.05:
+                    assump_report.append(f'<div class="assumption-pass">✅ 차이의 정규성 충족: p={format_p(sp)}</div>')
+                else:
+                    assump_report.append(f'<div class="assumption-fail">⚠️ 차이의 정규성 위배: p={format_p(sp)}</div>')
+                
+                stat, p = stats.ttest_rel(temp_df[y1], temp_df[y2])
+                p_val = p
+                
+                final_df = pd.DataFrame({
+                    "Variable (변수)": [y1, y2], 
+                    "Mean (평균)": [temp_df[y1].mean(), temp_df[y2].mean()], 
+                    "SD (표준편차)": [temp_df[y1].std(), temp_df[y2].std()],
+                    "t (t값)": [f"{stat:.3f}", ""], 
+                    "p (유의확률)": [format_p(p), ""]
+                })
+                interp = f"📌 사전 대비 사후의 수치 변화는 {'유의합니다' if p < 0.05 else '유의하지 않습니다'}."
 
     elif method == "분산분석(ANOVA)":
         g = st.selectbox("집단 변수 (범주형: 3집단 이상)", all_cols)
@@ -423,88 +436,103 @@ if up_file:
         y = st.selectbox("종속변수 (Linear:연속형 / Logistic:0,1범주형)", num_cols)
         
         if st.button("통계 분석 실행") and xs:
-            if "선형" in rtype:
-                X = sm.add_constant(df[xs]); model = sm.OLS(df[y], X).fit(); p_val = model.f_pvalue
-                vifs = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
-                max_vif = max(vifs[1:]) if len(vifs) > 1 else 1.0
-                if max_vif < 10:
-                    assump_report.append(f'<div class="assumption-pass">✅ 다중공선성 없음: 최대 VIF {max_vif:.2f} (기준 10 미만)</div>')
-                else:
-                    assump_report.append(f'<div class="assumption-fail">⚠️ 다중공선성 경고: 최대 VIF {max_vif:.2f} (변수 제거 또는 차원 축소 고려 권장)</div>')
-                dw = durbin_watson(model.resid)
-                if 1.5 < dw < 2.5:
-                      assump_report.append(f'<div class="assumption-pass">✅ 잔차 독립성 충족: Durbin-Watson {dw:.2f} (2에 근접)</div>')
-                else:
-                      assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 독립성 주의: Durbin-Watson {dw:.2f} (시계열 분석 등 고려 필요)</div>')
+            # [CRITICAL UPDATE] Listwise Deletion for Regression (SPSS Logic)
+            target_cols = list(xs) + [y]
+            reg_data = df[target_cols].dropna()
+            
+            if len(reg_data) == 0:
+                st.error("분석 가능한 데이터가 없습니다 (결측치 제외 후 N=0). 변수를 확인하십시오.")
+            else:
+                X = sm.add_constant(reg_data[xs])
                 
-                # [Standardization] 회귀분석용 ANOVA 테이블 (영문+한글 병기)
-                anova_data = {
-                    "Source (변동원)": ["Regression (회귀)", "Residual (잔차)", "Total (합계)"],
-                    "df (자유도)": [model.df_model, model.df_resid, model.df_model + model.df_resid],
-                    "Sum of Squares (제곱합)": [model.ess, model.ssr, model.ess + model.ssr],
-                    "Mean Square (평균제곱)": [model.mse_model, model.mse_resid, ""],
-                    "F Statistic (F값)": [model.fvalue, "", ""],
-                    "Significance (유의확률)": [format_p(model.f_pvalue), "", ""]
-                }
-                reg_anova_df = pd.DataFrame(anova_data)
+                if "선형" in rtype:
+                    model = sm.OLS(reg_data[y], X).fit()
+                    p_val = model.f_pvalue
+                    
+                    vifs = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
+                    max_vif = max(vifs[1:]) if len(vifs) > 1 else 1.0
+                    if max_vif < 10:
+                        assump_report.append(f'<div class="assumption-pass">✅ 다중공선성 없음: 최대 VIF {max_vif:.2f} (기준 10 미만)</div>')
+                    else:
+                        assump_report.append(f'<div class="assumption-fail">⚠️ 다중공선성 경고: 최대 VIF {max_vif:.2f} (변수 제거 또는 차원 축소 고려 권장)</div>')
+                    dw = durbin_watson(model.resid)
+                    if 1.5 < dw < 2.5:
+                          assump_report.append(f'<div class="assumption-pass">✅ 잔차 독립성 충족: Durbin-Watson {dw:.2f} (2에 근접)</div>')
+                    else:
+                          assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 독립성 주의: Durbin-Watson {dw:.2f} (시계열 분석 등 고려 필요)</div>')
+                    
+                    # [Standardization] 회귀분석용 ANOVA 테이블 (영문+한글 병기)
+                    anova_data = {
+                        "Source (변동원)": ["Regression (회귀)", "Residual (잔차)", "Total (합계)"],
+                        "df (자유도)": [model.df_model, model.df_resid, model.df_model + model.df_resid],
+                        "Sum of Squares (제곱합)": [model.ess, model.ssr, model.ess + model.ssr],
+                        "Mean Square (평균제곱)": [model.mse_model, model.mse_resid, ""],
+                        "F Statistic (F값)": [model.fvalue, "", ""],
+                        "Significance (유의확률)": [format_p(model.f_pvalue), "", ""]
+                    }
+                    reg_anova_df = pd.DataFrame(anova_data)
 
-                # [Standardization] 회귀계수 결과 테이블 (컬럼명 영문+한글)
-                final_df = pd.DataFrame({
-                    "Variable (변수명)": ["const"] + list(xs),
-                    "Coef (비표준화 계수)": model.params,
-                    "SE (표준오차)": model.bse,
-                    "t (t값)": model.tvalues,
-                    "p (유의확률)": model.pvalues
-                }).round(3)
-                final_df = final_df.reset_index(drop=True)
-                final_df['p (유의확률)'] = final_df['p (유의확률)'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
-                
-                sig_vars = []
-                for var in xs:
-                    if var in model.pvalues and model.pvalues[var] < 0.05:
-                        coef = model.params[var]
-                        effect = "정(+)의 영향" if coef > 0 else "부(-)의 영향"
-                        sig_vars.append(f"<b>{var}</b>({effect})")
-                
-                var_msg = ("또한, " + ", ".join(sig_vars) + "을 미치는 것으로 나타났습니다.") if sig_vars else "유의한 독립변수는 발견되지 않았습니다."
-                
-                r2 = model.rsquared
-                adj_r2 = model.rsquared_adj
-                sig_text = "유의합니다" if p_val < 0.05 else "유의하지 않습니다"
-                
-                interp = (
-                    f"📌 모델의 설명력(R²)은 {r2:.3f}, 수정된 설명력(Adj R²)은 {adj_r2:.3f}입니다. "
-                    f"통계적으로 이 모형은 {sig_text}(p={format_p(p_val)}). {var_msg}"
-                )
+                    # [Standardization] 회귀계수 결과 테이블 (컬럼명 영문+한글)
+                    final_df = pd.DataFrame({
+                        "Variable (변수명)": ["const"] + list(xs),
+                        "Coef (비표준화 계수)": model.params,
+                        "SE (표준오차)": model.bse,
+                        "t (t값)": model.tvalues,
+                        "p (유의확률)": model.pvalues
+                    }).round(3)
+                    final_df = final_df.reset_index(drop=True)
+                    final_df['p (유의확률)'] = final_df['p (유의확률)'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
+                    
+                    sig_vars = []
+                    for var in xs:
+                        if var in model.pvalues and model.pvalues[var] < 0.05:
+                            coef = model.params[var]
+                            effect = "정(+)의 영향" if coef > 0 else "부(-)의 영향"
+                            sig_vars.append(f"<b>{var}</b>({effect})")
+                    
+                    var_msg = ("또한, " + ", ".join(sig_vars) + "을 미치는 것으로 나타났습니다.") if sig_vars else "유의한 독립변수는 발견되지 않았습니다."
+                    
+                    r2 = model.rsquared
+                    adj_r2 = model.rsquared_adj
+                    sig_text = "유의합니다" if p_val < 0.05 else "유의하지 않습니다"
+                    
+                    interp = (
+                        f"📌 모델의 설명력(R²)은 {r2:.3f}, 수정된 설명력(Adj R²)은 {adj_r2:.3f}입니다. "
+                        f"통계적으로 이 모형은 {sig_text}(p={format_p(p_val)}). {var_msg}"
+                    )
 
-            else: # 로지스틱
-                X = sm.add_constant(df[xs]); model = sm.Logit(df[y], X).fit(disp=False); p_val = model.llr_pvalue
-                
-                params = model.params
-                conf = model.conf_int()
-                conf.columns = ['Lower CI', 'Upper CI']
-                
-                # [Standardization] 로지스틱 결과표 컬럼명
-                final_df = pd.DataFrame({
-                    "Coef (비표준화 계수)": params,
-                    "SE (표준오차)": model.bse,
-                    "OR (오즈비)": np.exp(params),
-                    "95% CI Lower": np.exp(conf['Lower CI']),
-                    "95% CI Upper": np.exp(conf['Upper CI']),
-                    "p (유의확률)": model.pvalues
-                }).round(3)
-                final_df = final_df.reset_index().rename(columns={'index': 'Variable (변수명)'})
-                final_df['p (유의확률)'] = final_df['p (유의확률)'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
-                
-                sig_vars = []
-                for var in xs:
-                    if var in model.pvalues and model.pvalues[var] < 0.05:
-                        or_val = np.exp(model.params[var])
-                        effect = "증가" if or_val > 1 else "감소"
-                        sig_vars.append(f"<b>{var}</b>(OR={or_val:.2f}, 확률 {effect})")
-                
-                var_msg = ("또한, " + ", ".join(sig_vars) + " 시키는 경향이 유의했습니다.") if sig_vars else "유의한 독립변수는 발견되지 않았습니다."
-                interp = f"📌 로지스틱 모형은 유의합니다(p={format_p(p_val)}). {var_msg}"
+                else: # 로지스틱
+                    try:
+                        model = sm.Logit(reg_data[y], X).fit(disp=False)
+                        p_val = model.llr_pvalue
+                        
+                        params = model.params
+                        conf = model.conf_int()
+                        conf.columns = ['Lower CI', 'Upper CI']
+                        
+                        # [Standardization] 로지스틱 결과표 컬럼명
+                        final_df = pd.DataFrame({
+                            "Coef (비표준화 계수)": params,
+                            "SE (표준오차)": model.bse,
+                            "OR (오즈비)": np.exp(params),
+                            "95% CI Lower": np.exp(conf['Lower CI']),
+                            "95% CI Upper": np.exp(conf['Upper CI']),
+                            "p (유의확률)": model.pvalues
+                        }).round(3)
+                        final_df = final_df.reset_index().rename(columns={'index': 'Variable (변수명)'})
+                        final_df['p (유의확률)'] = final_df['p (유의확률)'].apply(lambda x: "<.001" if x < 0.001 else f"{x:.3f}")
+                        
+                        sig_vars = []
+                        for var in xs:
+                            if var in model.pvalues and model.pvalues[var] < 0.05:
+                                or_val = np.exp(model.params[var])
+                                effect = "증가" if or_val > 1 else "감소"
+                                sig_vars.append(f"<b>{var}</b>(OR={or_val:.2f}, 확률 {effect})")
+                        
+                        var_msg = ("또한, " + ", ".join(sig_vars) + " 시키는 경향이 유의했습니다.") if sig_vars else "유의한 독립변수는 발견되지 않았습니다."
+                        interp = f"📌 로지스틱 모형은 유의합니다(p={format_p(p_val)}). {var_msg}"
+                    except Exception as e:
+                        st.error(f"로지스틱 회귀분석 실패 (데이터 분리 등): {e}")
 
     # --- Step 03: 결과 대시보드 ---
     if final_df is not None:
@@ -534,7 +562,8 @@ if up_file:
                  st.info(f"📊 모형 요약 정보\n{anova_model_info}")
             
         with col_main_R:
-            st.markdown("##### 💡 핵심 결론")
+            st.markdown("##### 💡 Writing Guide")
+            st.caption("※ 아래 문구는 학술적 기술을 돕기 위한 비계(Scaffolding)입니다. 연구자의 고찰을 담아 수정하여 사용하십시오.")
             
             if p_val is not None:
                 if p_val < 0.05:
@@ -551,7 +580,7 @@ if up_file:
             </div>
             """, unsafe_allow_html=True)
             
-            # [추가] 추가 메트릭 표시 (예: 자기상관계수 - 옵션 A)
+            # 추가 메트릭 표시 (자기상관계수)
             if extra_metric:
                 st.markdown(f"""
                 <div style="background-color: #f0fdfa; padding: 15px; border-radius: 10px; border: 1px solid #ccfbf1; margin-top: 10px;">
@@ -576,13 +605,13 @@ if up_file:
 # 하단 연구 윤리 가이드
 st.markdown(f"""
 <div class="ethics-container">
-    <div class="ethics-title">⚠️ 연구자 유의사항</div>
+    <div class="ethics-title">⚠️ 연구 윤리 가이드</div>
     <div class="ethics-text">
         1. 본 서비스에서 산출된 결과는 유의수준 0.05를 기준으로 한 통계적 판정입니다.<br>
-        2. 최종 분석 결과의 정확성을 검토하고 보고서를 작성할 책임은 연구자 본인에게 있습니다.
+        2. 제공된 'Writing Guide'는 결과(Results)의 객관적 서술을 돕기 위한 템플릿이며, 고찰(Discussion)은 연구자가 직접 작성해야 합니다.
     </div>
 </div>
 <div style='text-align: center; color: #cbd5e1; margin-top: 20px; font-size: 0.8rem;'>
-    STATistical Engine for Research & Analysis | ANDA Lab | nncj91@snu.ac.kr
+    STATERA | ANDA Lab | nncj91@snu.ac.kr
 </div>
 """, unsafe_allow_html=True)
