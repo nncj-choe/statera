@@ -127,7 +127,7 @@ STAT_MENTOR = {
         "check": "응답이 누락된 결측치가 분석에 포함되었는지 확인해야 합니다."
     },
     "카이제곱 검정": {
-        "purpose": "두 범주형 변수(예: 성별-찬반)가 서로 관련이 있는지, 독립적인지 봅니다.",
+        "purpose": "두 범주형 변수(예: 성별)가 서로 관련이 있는지, 독립적인지 봅니다.",
         "indicator": "p < 0.05라면 두 변수는 서로 통계적으로 유의한 관련성이 있습니다.",
         "check": "기대빈도가 5보다 작은 셀이 전체의 20%를 넘지 않아야 신뢰할 수 있습니다."
     },
@@ -427,7 +427,6 @@ if up_file:
                 # 4. 등분산성/선형성 확인 안내 (시각적)
                 assump_report.append('<div class="assumption-pass">ℹ️ 등분산성 및 선형성은 아래 잔차도(Residual Plot)를 통해 확인하십시오.</div>')
 
-                st.info(f"🎯 분석 대상 종속변수(Dependent Variable): {y}")
                 final_df = pd.DataFrame({
                     "Predictor (독립변수)": ["(Constant)"] + list(xs), "B (비표준화 계수)": model.params.values,
                     "Beta (표준화 계수)": [np.nan] + list(beta.values), "p (유의확률)": model.pvalues.apply(format_p).values,
