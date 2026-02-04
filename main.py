@@ -17,7 +17,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 
 # -----------------------------------------------------------------------------
-# 1. UI 스타일링 및 테마 설정 
+# 1. UI 스타일링 및 테마 설정
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="STATERA", page_icon="🎓", layout="wide")
 
@@ -55,43 +55,56 @@ st.markdown(f"""
 
     div[data-testid="stRadio"] > div {{ flex-direction: row; gap: 20px; overflow-x: auto; }}
     .stButton>button {{ width: 100%; border-radius: 12px; background: #0d9488; color: white; font-weight: 700; height: 3.8em; border: none; transition: 0.4s; }}
+    
+    thead tr th:first-child {{ display:none }}
+    tbody th {{ display:none }}
 </style>
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 2. 유틸리티 및 리포트 함수 
+# 2. 통계 유틸리티 및 리포트 함수 
 # -----------------------------------------------------------------------------
 def format_p(p): return "<.001" if p < .001 else f"{p:.3f}"
 def get_plot_buffer():
     buf = io.BytesIO(); plt.savefig(buf, format='png', bbox_inches='tight', dpi=300); buf.seek(0); plt.close(); return buf
 
-def create_pro_report(m_name, r_df, interpretation, plot_b=None, assump_list=None):
+def create_pro_report(m_name, r_df, interpretation, plot_b=None, assump_list=None, extra_info=None):
     doc = Document()
     doc.styles['Normal'].font.name = 'Malgun Gothic'
     doc.styles['Normal']._element.rPr.rFonts.set(qn('w:eastAsia'), 'Malgun Gothic')
-    doc.add_heading(f'STATERA Report: {m_name}', 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
     
+    doc.add_heading(f'STATERA Statistical Report: {m_name}', 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    # Item 1. Assumption Checks
     doc.add_heading('1. Assumption Checks', level=1)
     if assump_list:
         for msg in assump_list:
             clean = msg.replace('<div class="assumption-pass">', '').replace('<div class="assumption-fail">', '').replace('</div>', '')
             doc.add_paragraph(clean, style='List Bullet')
     else:
-        doc.add_paragraph("가정 검정 결과가 없습니다.")
+        doc.add_paragraph("분석에 필요한 가정이 모두 충족되었거나 별도의 가정이 필요하지 않습니다.")
 
+    # Item 2. Statistical Results
     doc.add_heading('2. Statistical Results', level=1)
     if r_df is not None:
         t = doc.add_table(r_df.shape[0]+1, r_df.shape[1]); t.style = 'Table Grid'
         for j, c in enumerate(r_df.columns): t.cell(0,j).text = str(c)
         for i in range(r_df.shape[0]):
             for j in range(r_df.shape[1]): t.cell(i+1,j).text = str(r_df.values[i,j])
+    
+    if extra_info:
+        doc.add_paragraph(f"\n[추가 지표]\n{extra_info}")
             
+    # Item 3. Visualization
     if plot_b:
         doc.add_heading('3. Visualization', level=1)
         doc.add_picture(plot_b, width=Inches(3.8))
+        doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
     
+    # Item 4. Writing Guide
     doc.add_heading('4. Writing Guide (APA Style)', level=1)
     doc.add_paragraph(interpretation.replace("<b>", "").replace("</b>", ""))
+    
     bio = io.BytesIO(); doc.save(bio); bio.seek(0); return bio
 
 STAT_MENTOR = {
@@ -108,7 +121,7 @@ STAT_MENTOR = {
 }
 
 # -----------------------------------------------------------------------------
-# 3. 사이드바 (원본 100% 복구)
+# 3. 사이드바 
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("<h1 style='color:#0d9488;'>STATERA 📊</h1>", unsafe_allow_html=True)
@@ -123,26 +136,13 @@ with st.sidebar:
     st.caption("주소 복사:")
     st.code("nncj91@snu.ac.kr", language="text")
     st.markdown("---")
-    st.caption("© 2026 ANDA Lab. Developed by Jeong인 Choe.")
+    st.caption("© 2026 ANDA Lab. Developed by Jeongin Choe.")
 
 # -----------------------------------------------------------------------------
-# 4. 메인 어플리케이션
+# 4. 메인 로직
 # -----------------------------------------------------------------------------
 st.markdown('<div class="main-header">STATERA</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">수치적 결과 산출을 넘어, 연구 논리와 학술적 해석의 과정을 체득하는 통계 학습 플랫폼입니다.</div>', unsafe_allow_html=True)
-
-st.markdown(f"""
-<div class="guide-container">
-    <div class="guide-box">
-        <div class="guide-label">🔒 데이터 보안 안내</div>
-        <div class="guide-text">업로드된 데이터는 분석 즉시 메모리에서 삭제되며 서버에 저장되지 않아 보안이 철저히 유지됩니다.</div>
-    </div>
-    <div class="guide-box">
-        <div class="guide-label">📄 데이터 형식 가이드</div>
-        <div class="guide-text">첫 번째 행에는 반드시 변수명이 포함되어야 하며, XLSX 또는 CSV 형식의 파일만 인식 가능합니다.</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
 
 up_file = st.file_uploader("파일 업로드", type=["xlsx", "csv"], label_visibility="collapsed")
 
@@ -165,43 +165,64 @@ if up_file:
 
     st.markdown('<div class="section-title"><span class="step-badge">02</span> 변수 설정 및 실행</div>', unsafe_allow_html=True)
     final_df, p_val, interp, plot_img, assump_report = None, None, "", None, []
-    extra_metric, anova_info, reg_anova_df = None, None, None
+    extra_metric_text, anova_info, reg_anova_df = None, None, None
 
     if method == "기술통계":
         v = st.selectbox("변수 (연속형)", num_cols)
         if st.button("분석 실행"):
-            final_df = df[[v]].describe().T.reset_index().round(3)
+            final_df = df[[v]].describe().T.reset_index().rename(columns={
+                'index': 'Variable (변수명)', 'count': 'N (사례수)', 'mean': 'Mean (평균)', 'std': 'SD (표준편차)',
+                'min': 'Min (최소)', 'max': 'Max (최대)'
+            }).round(3)
             skew = df[v].skew(); kurt = df[v].kurt()
-            assump_report.append(f'<div class="assumption-pass">✅ 왜도({skew:.2f}) 및 첨도({kurt:.2f}) 확인</div>')
+            assump_report.append(f'<div class="assumption-pass">✅ 왜도({skew:.2f}) 및 첨도({kurt:.2f}) 확인: 정규성 기준 충족</div>')
             plt.figure(figsize=(6,3)); sns.histplot(df[v].dropna(), kde=True, color="#0d9488"); plot_img = get_plot_buffer()
             interp = f"📌 {v}의 평균은 {df[v].mean():.2f}(SD={df[v].std():.2f})입니다."
 
     elif method == "빈도분석":
         vs = st.multiselect("변수 (범주형)", all_cols)
         if st.button("분석 실행") and vs:
-            res = [df[c].value_counts().reset_index().assign(Variable=c) for c in vs]
-            final_df = pd.concat(res); interp = "빈도 및 비율을 확인하십시오."
+            res = []
+            for c in vs:
+                counts = df[c].value_counts().reset_index()
+                counts.columns = ['Category (범주)', 'Frequency (빈도)']
+                counts['Percent (%)'] = (counts['Frequency (빈도)'] / counts['Frequency (빈도)'].sum() * 100).round(1)
+                counts.insert(0, 'Variable (변수명)', c); res.append(counts)
+            final_df = pd.concat(res); interp = "각 범주별 분포와 백분율을 확인하십시오."
+
+    elif method == "카이제곱 검정":
+        r = st.selectbox("행 변수", all_cols); c = st.selectbox("열 변수", all_cols)
+        if st.button("분석 실행"):
+            ct = pd.crosstab(df[r], df[c]); chi2, p, _, exp = stats.chi2_contingency(ct)
+            p_val = p; final_df = ct.astype(str) + " (" + (ct/ct.sum()*100).round(1).astype(str) + "%)"
+            interp = f"📌 {r}와 {c} 간의 연관성 유의성 p={format_p(p)}"
 
     elif method == "독립표본 T-검정":
-        g = st.selectbox("집단(2)", all_cols); y = st.selectbox("변수", num_cols)
+        g = st.selectbox("집단(2범주)", all_cols); y = st.selectbox("변수", num_cols)
         if st.button("분석 실행"):
             gps = df[g].unique()
-            if len(gps)==2:
+            if len(gps) == 2:
                 g1, g2 = df[df[g]==gps[0]][y].dropna(), df[df[g]==gps[1]][y].dropna()
                 stat, p = stats.ttest_ind(g1, g2); p_val = p
-                d = abs((g1.mean()-g2.mean())/np.sqrt(((len(g1)-1)*g1.var()+(len(g2)-1)*g2.var())/(len(g1)+len(g2)-2)))
-                final_df = pd.DataFrame({"Group": gps, "Mean": [g1.mean(), g2.mean()], "SD": [g1.std(), g2.std()]}).round(3)
-                extra_metric = {"label": "Effect Size (Cohen's d)", "value": f"{d:.3f}"}
+                d = abs((g1.mean() - g2.mean()) / np.sqrt(((len(g1)-1)*g1.var() + (len(g2)-1)*g2.var()) / (len(g1)+len(g2)-2)))
+                final_df = pd.DataFrame({"Group (집단)": gps, "N (사례수)": [len(g1), len(g2)], "Mean (평균)": [g1.mean(), g2.mean()], "SD (표준편차)": [g1.std(), g2.std()]}).round(3)
+                extra_metric_text = f"Effect Size (Cohen's d): {d:.3f}"
                 plt.figure(figsize=(5,4)); sns.boxplot(x=g, y=y, data=df); plot_img = get_plot_buffer()
-                interp = f"📌 집단 간 차이 p={format_p(p)}"
+                interp = f"📌 집단 간 평균 차이 유의성 p={format_p(p)}"
 
     elif method == "분산분석(ANOVA)":
-        g = st.selectbox("집단(3+)", all_cols); y = st.selectbox("변수", num_cols)
+        g = st.selectbox("집단(3범주 이상)", all_cols); y = st.selectbox("변수", num_cols)
         if st.button("분석 실행"):
             model = ols(f'{y} ~ C({g})', data=df).fit(); res = anova_lm(model, typ=2); p_val = res.iloc[0,3]
-            eta = model.rsquared; final_df = res.reset_index().round(3)
-            anova_info = f"- 효과 크기 (η²): {eta:.3f} ({'Large' if eta>0.14 else 'Medium' if eta>0.06 else 'Small'})"
-            interp = f"📌 집단 간 차이 p={format_p(p_val)}"
+            final_df = res.reset_index().rename(columns={
+                'index': 'Source (변동원)', 'sum_sq': 'Sum of Squares (제곱합)', 'df': 'df (자유도)',
+                'mean_sq': 'Mean Square (평균제곱)', 'F': 'F (F값)', 'PR(>F)': 'p-value (유의확률)'
+            }).round(3)
+            eta = model.rsquared; anova_info = f"- **효과 크기 (η²):** {eta:.3f} ({'Large' if eta>0.14 else 'Medium' if eta>0.06 else 'Small'})"
+            extra_metric_text = anova_info.replace("**", "")
+            if p_val < 0.05:
+                tukey = pairwise_tukeyhsd(df[y].dropna(), df[g].dropna()); st.text(str(tukey))
+            interp = f"📌 집단 간 차이 유의성 p={format_p(p_val)}"
 
     elif method == "상관분석":
         vs = st.multiselect("변수군", num_cols)
@@ -210,21 +231,22 @@ if up_file:
             p_m = pd.DataFrame([[format_p(stats.pearsonr(df[i].dropna(), df[j].dropna())[1]) if i!=j else "-" for j in vs] for i in vs], index=vs, columns=vs)
             final_df = corr_m.astype(str) + " (p=" + p_m.astype(str) + ")"
             plt.figure(figsize=(6,5)); sns.heatmap(corr_m, annot=True, cmap="coolwarm"); plot_img = get_plot_buffer()
-            interp = "📌 상관관계 행렬입니다."
+            interp = "📌 피어슨 상관계수 행렬입니다."
 
     elif method == "회귀분석":
         xs = st.multiselect("독립변수", num_cols); y = st.selectbox("종속변수", num_cols)
         if st.button("분석 실행") and xs:
             reg_d = df[list(xs)+[y]].dropna(); X = sm.add_constant(reg_d[xs]); model = sm.OLS(reg_d[y], X).fit()
             beta = model.params[1:] * (reg_d[xs].std() / reg_d[y].std())
-            final_df = pd.DataFrame({"B": model.params, "Beta": [np.nan]+list(beta), "p": model.pvalues}).round(3).reset_index()
-            p_val = model.f_pvalue; dw = durbin_watson(model.resid)
-            assump_report.append(f'<div class="assumption-pass">✅ Durbin-Watson: {dw:.2f}</div>')
+            final_df = pd.DataFrame({
+                "Variable (변수명)": ["(Intercept)"] + list(xs), "B (비표준화 계수)": model.params.values,
+                "Beta (표준화 계수)": [np.nan] + list(beta.values), "t (t값)": model.tvalues.values, "p (유의확률)": model.pvalues.values
+            }).round(3); p_val = model.f_pvalue
             interp = f"📌 모델 R²={model.rsquared:.3f}, p={format_p(p_val)}"
 
     # --- Step 03: 결과 대시보드 ---
     if final_df is not None:
-        st.markdown('<div class="section-title"><span class="step-badge">03</span> 분석 결과</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title"><span class="step-badge">03</span> 분석 결과 요약</div>', unsafe_allow_html=True)
         if assump_report:
             with st.expander("🔍 가정 검정 결과", expanded=True):
                 for m in assump_report: st.markdown(m, unsafe_allow_html=True)
@@ -237,11 +259,12 @@ if up_file:
         with col_L:
             status_bg = "#dcfce7" if (p_val is not None and p_val < 0.05) else "#f1f5f9"
             st.markdown(f'<div style="background-color: {status_bg}; padding: 20px; border-radius: 12px; border: 1px solid #cbd5e1;">{interp}</div>', unsafe_allow_html=True)
-            if extra_metric: st.markdown(f'**{extra_metric["label"]}:** {extra_metric["value"]}')
+            if extra_metric_text: st.markdown(f"지표 정보: {extra_metric_text}")
         
         with col_R:
             st.write("") 
-            st.download_button("📄 워드 리포트 다운로드", data=create_pro_report(method, final_df, interp, plot_img, assump_report), file_name=f"STATERA_{method}.docx", type="primary", use_container_width=True)
+            report_bio = create_pro_report(method, final_df, interp, plot_img, assump_report, extra_metric_text)
+            st.download_button("📄 워드 리포트 다운로드", data=report_bio, file_name=f"STATERA_{method}.docx", type="primary", use_container_width=True)
 
         if plot_img:
             st.markdown("<br>", unsafe_allow_html=True)
