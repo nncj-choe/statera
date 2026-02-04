@@ -220,10 +220,10 @@ if up_file:
     # Step 1: 분석 기법 선택
     st.markdown('<div class="section-title"><span class="step-badge">01</span> 연구 목적에 따른 분석 기법 선택</div>', unsafe_allow_html=True)
     group = st.selectbox("분석 범주를 선택하십시오.", [
-        "기초 데이터 분석 (Descriptive/Frequency)", 
-        "집단 간 차이 검정 (T-test/ANOVA)", 
-        "관계 및 영향력 분석 (Chi2/Corr/Regression)",
-        "척도 신뢰도 분석 (Reliability)"
+        "기초 데이터 분석", 
+        "집단 간 차이 검정", 
+        "관계 및 영향력 분석",
+        "척도 신뢰도 분석"
     ])
     
     if "기초" in group: m_list = ["기술통계", "빈도분석"]
