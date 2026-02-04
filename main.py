@@ -65,7 +65,7 @@ st.markdown(f"""
 # -----------------------------------------------------------------------------
 # 2. 유틸리티 함수
 # -----------------------------------------------------------------------------
-def format_p(p): return "< .001" if p < .001 else f"= {p:.3f}"
+def format_p(p): return "< .001" if p < .001 else f"{p:.3f}"
 def get_plot_buffer():
     buf = io.BytesIO(); plt.savefig(buf, format='png', bbox_inches='tight', dpi=300); buf.seek(0); plt.close(); return buf
 
