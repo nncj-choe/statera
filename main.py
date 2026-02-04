@@ -22,7 +22,7 @@ from docx.oxml.ns import qn
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="STATERA", page_icon="🎓", layout="wide")
 
-# 한글 폰트 설정
+# 한글 폰트 설정 (깨짐 방지)
 system_name = platform.system()
 if system_name == 'Windows':
     plt.rc('font', family='Malgun Gothic')
@@ -41,6 +41,7 @@ st.markdown(f"""
     * {{ font-family: 'Pretendard', sans-serif; }}
     .main-header {{ color: #0d9488; text-align: center; font-size: 2.8rem; font-weight: 800; margin-bottom: 5px; }}
     .sub-header {{ text-align: center; color: #64748b; font-size: 1.1rem; margin-bottom: 40px; }}
+    
     .guide-container {{ display: flex; gap: 20px; margin-bottom: 30px; }}
     .guide-box {{ flex: 1; background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); }}
     .guide-label {{ font-size: 1.1rem; font-weight: 700; color: #0f172a; margin-bottom: 8px; display: flex; align-items: center; }}
@@ -83,6 +84,7 @@ def interpret_cohen_d(d):
     elif d < 0.8: return "Medium"
     else: return "Large"
 
+# 리포트 생성 함수
 def create_pro_report(m_name, r_df, interpretation, plot_b=None, assump_list=None, extra_info=None):
     doc = Document()
     doc.styles['Normal'].font.name = 'Malgun Gothic'
@@ -121,7 +123,7 @@ def create_pro_report(m_name, r_df, interpretation, plot_b=None, assump_list=Non
     
     bio = io.BytesIO(); doc.save(bio); bio.seek(0); return bio
 
-# [대학생 Scaffolding 적용]
+# [대학생 Scaffolding + 4개 카테고리 구조]
 STAT_MENTOR = {
     "기술통계": {
         "purpose": "수집된 데이터가 전반적으로 어떻게 생겼는지(분포) 요약해서 보여줍니다.",
@@ -176,7 +178,7 @@ STAT_MENTOR = {
 }
 
 # -----------------------------------------------------------------------------
-# 3. 사이드바 (원본 100% 동일)
+# 3. 사이드바 
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("<h1 style='color:#0d9488;'>STATERA 📊</h1>", unsafe_allow_html=True)
@@ -224,7 +226,7 @@ if up_file:
         st.error(f"데이터 로드 중 오류가 발생했습니다: {e}")
         st.stop()
 
-    # Step 1: 분석 기법 선택
+    # Step 1
     st.markdown('<div class="section-title"><span class="step-badge">01</span> 연구 목적에 따른 분석 기법 선택</div>', unsafe_allow_html=True)
     group = st.selectbox("분석 범주를 선택하십시오.", [
         "기초 데이터 분석 (Descriptive/Frequency)", 
@@ -252,7 +254,7 @@ if up_file:
     </div>
     """, unsafe_allow_html=True)
 
-    # Step 2: 변수 설정 및 실행
+    # Step 2
     st.markdown('<div class="section-title"><span class="step-badge">02</span> 분석 변수 설정 및 실행</div>', unsafe_allow_html=True)
     final_df, p_val, interp, plot_img, assump_report = None, None, "", None, []
     extra_metric_text, anova_info, reg_anova_df = None, None, None
@@ -442,7 +444,7 @@ if up_file:
             
         with col_main_R:
             st.markdown("##### 💡 Writing Guide")
-            st.caption("※ 아래 문구는 학술적 기술을 돕기 위한 비계(Scaffolding)입니다. 연구자의 고찰을 담아 수정하여 사용하십시오.")
+            st.caption("아래 문구는 학술적 기술을 돕기 위한 비계(Scaffolding)입니다. 연구자의 고찰을 담아 수정하여 사용하십시오.")
             
             status_bg = "#dcfce7" if (p_val is not None and p_val < 0.05) else "#f1f5f9"
             st.markdown(f"""
@@ -461,7 +463,7 @@ if up_file:
             st.write("") 
             st.download_button(
                 label="📄 워드 리포트 다운로드",
-                data=create_pro_report(method, final_df, interp, "통계 수치를 논문에 인용하세요.", plot_b=plot_img, assump_list=assump_report, extra_info=extra_metric_text),
+                data=create_pro_report(method, final_df, interp, plot_b=plot_img, assump_list=assump_report, extra_info=extra_metric_text),
                 file_name=f"STATERA_{method}.docx",
                 use_container_width=True, 
                 type="primary"
