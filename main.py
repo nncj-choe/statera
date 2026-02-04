@@ -114,7 +114,7 @@ def create_pro_report(m_name, r_df, interpretation, plot_b=None, assump_list=Non
     
     bio = io.BytesIO(); doc.save(bio); bio.seek(0); return bio
 
-# [대학생 Scaffolding 적용]
+# [Scaffolding 적용]
 STAT_MENTOR = {
     "기술통계": {
         "purpose": "수집된 데이터가 전반적으로 어떻게 생겼는지(분포) 요약해서 보여줍니다.",
@@ -127,7 +127,7 @@ STAT_MENTOR = {
         "check": "응답이 누락된 결측치가 분석에 포함되었는지 확인해야 합니다."
     },
     "카이제곱 검정": {
-        "purpose": "두 범주형 변수(예: 성별)가 서로 관련이 있는지, 독립적인지 봅니다.",
+        "purpose": "두 범주형 변수(예: 성별-찬반)가 서로 관련이 있는지, 독립적인지 봅니다.",
         "indicator": "p < 0.05라면 두 변수는 서로 통계적으로 유의한 관련성이 있습니다.",
         "check": "기대빈도가 5보다 작은 셀이 전체의 20%를 넘지 않아야 신뢰할 수 있습니다."
     },
@@ -163,8 +163,8 @@ STAT_MENTOR = {
     },
     "회귀분석": {
         "purpose": "원인 변수(X)가 결과 변수(Y)에 얼마나 영향을 미치는지 예측합니다.",
-        "indicator": "R²는 설명력을, Beta는 영향력의 강도를 뜻합니다. (p < 0.05여야 유의)",
-        "check": "독립변수 간 중복(VIF), 잔차의 독립성(Durbin-Watson), 그리고 선형성(산점도)을 모두 점검해야 합니다."
+        "indicator": "[선형] R²(설명력)와 Beta, [로지스틱] Pseudo-R²(설명력)와 OR(오즈비)로 해석합니다. (p < 0.05 유의)",
+        "check": "[선형] 선형성/정규성/등분산성/독립성, [로지스틱] 다중공선성/독립성을 각각 점검해야 합니다."
     }
 }
 
@@ -220,10 +220,10 @@ if up_file:
     # Step 1: 분석 기법 선택
     st.markdown('<div class="section-title"><span class="step-badge">01</span> 연구 목적에 따른 분석 기법 선택</div>', unsafe_allow_html=True)
     group = st.selectbox("분석 범주를 선택하십시오.", [
-        "기초 데이터 분석", 
-        "집단 간 차이 검정", 
-        "관계 및 영향력 분석",
-        "척도 신뢰도 분석"
+        "기초 데이터 분석 (Descriptive/Frequency)", 
+        "집단 간 차이 검정 (T-test/ANOVA)", 
+        "관계 및 영향력 분석 (Chi2/Corr/Regression)",
+        "척도 신뢰도 분석 (Reliability)"
     ])
     
     if "기초" in group: m_list = ["기술통계", "빈도분석"]
@@ -408,12 +408,25 @@ if up_file:
                 beta = model.params[1:] * (reg_d[xs].std() / reg_d[y].std())
                 conf = model.conf_int(); conf.columns = ['Lower', 'Upper']
                 
+                # 1. 다중공선성 (VIF)
                 vifs = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
                 if max(vifs[1:]) < 10: assump_report.append(f'<div class="assumption-pass">✅ 다중공선성 없음 (Max VIF={max(vifs[1:]):.2f})</div>')
                 else: assump_report.append(f'<div class="assumption-fail">⚠️ 다중공선성 경고 (Max VIF={max(vifs[1:]):.2f})</div>')
+                
+                # 2. 잔차 독립성 (Durbin-Watson)
                 dw = durbin_watson(model.resid)
                 assump_report.append(f'<div class="{"assumption-pass" if 1.5<dw<2.5 else "assumption-fail"}">✅ 잔차 독립성 (DW={dw:.2f})</div>')
                 
+                # 3. 잔차 정규성 (Shapiro-Wilk)
+                resid = model.resid
+                if len(resid) >= 3:
+                    _, p_norm = stats.shapiro(resid)
+                    if p_norm > 0.05: assump_report.append(f'<div class="assumption-pass">✅ 잔차 정규성 충족 (p={p_norm:.3f})</div>')
+                    else: assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 정규성 위배 (p={p_norm:.3f})</div>')
+                
+                # 4. 등분산성/선형성 확인 안내 (시각적)
+                assump_report.append('<div class="assumption-pass">ℹ️ 등분산성 및 선형성은 아래 잔차도(Residual Plot)를 통해 확인하십시오.</div>')
+
                 st.info(f"🎯 분석 대상 종속변수(Dependent Variable): {y}")
                 final_df = pd.DataFrame({
                     "Predictor (독립변수)": ["(Constant)"] + list(xs), "B (비표준화 계수)": model.params.values,
@@ -422,25 +435,39 @@ if up_file:
                 }).round(3).reset_index(drop=True)
                 
                 reg_anova_df = pd.DataFrame({"Source": ["Regression", "Residual"], "df": [model.df_model, model.df_resid], "F": [model.fvalue, ""]})
+                
+                # 시각화 (산점도 or 잔차도)
                 if len(xs)==1: 
-                    plt.figure(figsize=(6,5)); sns.regplot(x=reg_d[xs[0]], y=reg_d[y], line_kws={"color":"red"}); plot_img = get_plot_buffer()
+                    plt.figure(figsize=(6,5)); sns.regplot(x=reg_d[xs[0]], y=reg_d[y], line_kws={"color":"red"}); plt.title("Scatter Plot with Regression Line"); plot_img = get_plot_buffer()
                 else:
-                    plt.figure(figsize=(6,5)); plt.scatter(model.fittedvalues, model.resid); plt.title("Residual vs Fitted"); plot_img = get_plot_buffer()
+                    plt.figure(figsize=(6,5)); plt.scatter(model.fittedvalues, model.resid); plt.axhline(0, color='red', linestyle='--'); plt.title("Residual vs Fitted"); plt.xlabel("Fitted Values"); plt.ylabel("Residuals"); plot_img = get_plot_buffer()
                 
                 sig_txt = "유의하게 설명하고 있습니다" if p_val < 0.05 else "유의하게 설명하지 못하고 있습니다"
                 interp = f"📌 [회귀분석 해석]<br>회귀모형은 종속변수({y})를 통계적으로 {sig_txt} (F={model.fvalue:.3f}, p{format_p(p_val)}). 모델의 설명력(R²)은 {model.rsquared:.3f}입니다."
             else:
+                # 로지스틱
                 if reg_d[y].dtype == 'object':
                     from sklearn.preprocessing import LabelEncoder
                     le = LabelEncoder(); reg_d[y] = le.fit_transform(reg_d[y])
                     st.warning(f"ℹ️ 종속변수 '{y}'가 텍스트여서 0과 1로 변환했습니다.")
+                
+                # 이항 변수 체크
+                if len(reg_d[y].unique()) != 2:
+                    st.error("로지스틱 회귀분석의 종속변수는 반드시 0/1 또는 두 개의 범주만 가져야 합니다.")
+                else:
+                    model = sm.Logit(reg_d[y], X).fit(disp=False); p_val = model.llr_pvalue
+                    pseudo_r2 = model.prsquared # Pseudo R-squared
+                    
+                    # 다중공선성 체크 (로지스틱도 필요)
+                    vifs = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
+                    if max(vifs[1:]) < 10: assump_report.append(f'<div class="assumption-pass">✅ 다중공선성 없음 (Max VIF={max(vifs[1:]):.2f})</div>')
+                    else: assump_report.append(f'<div class="assumption-fail">⚠️ 다중공선성 경고 (Max VIF={max(vifs[1:]):.2f})</div>')
 
-                model = sm.Logit(reg_d[y], X).fit(disp=False); p_val = model.llr_pvalue
-                final_df = pd.DataFrame({
-                    "Predictor (독립변수)": model.params.index, "B (Coeff)": model.params.values, 
-                    "OR (Odds Ratio)": np.exp(model.params.values), "p (Sig)": model.pvalues.apply(format_p).values
-                }).round(3).reset_index(drop=True)
-                interp = f"📌 [로지스틱 회귀 해석]<br>모형의 유의확률은 p{format_p(p_val)}입니다. OR(오즈비)이 1보다 크면 해당 변수가 증가할수록 사건 발생 확률이 높아짐을 의미합니다."
+                    final_df = pd.DataFrame({
+                        "Predictor (독립변수)": model.params.index, "B (Coeff)": model.params.values, 
+                        "OR (Odds Ratio)": np.exp(model.params.values), "p (Sig)": model.pvalues.apply(format_p).values
+                    }).round(3).reset_index(drop=True)
+                    interp = f"📌 [로지스틱 회귀 해석]<br>모형의 설명력(Pseudo-R²)은 {pseudo_r2:.3f}이며, 유의확률은 p{format_p(p_val)}입니다. OR(오즈비)이 1보다 크면 해당 변수가 증가할수록 사건 발생 확률이 높아짐을 의미합니다."
 
     # --- Step 03: 결과 대시보드 ---
     if final_df is not None:
@@ -493,7 +520,7 @@ if up_file:
             st.image(plot_img, use_container_width=True)
 
 # -----------------------------------------------------------------------------
-# 5. 연구 윤리 가이드 
+# 5. 연구 윤리 가이드
 # -----------------------------------------------------------------------------
 st.markdown(f"""
 <div class="ethics-container">
