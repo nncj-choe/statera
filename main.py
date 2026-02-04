@@ -18,7 +18,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 
 # -----------------------------------------------------------------------------
-# 1. 설정 및 스타일 
+# 1. 설정 및 스타일
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="STATERA", page_icon="🎓", layout="wide")
 
@@ -51,6 +51,8 @@ st.markdown(f"""
     div[data-testid="stRadio"] > div {{ flex-direction: row; gap: 20px; overflow-x: auto; }}
     .stButton>button {{ width: 100%; border-radius: 12px; background: #0d9488; color: white; font-weight: 700; height: 3.8em; border: none; transition: 0.4s; }}
     .ethics-container {{ background-color: #fff7ed; border: 1px solid #ffedd5; border-radius: 12px; padding: 20px; margin-top: 50px; margin-bottom: 30px; }}
+    .ethics-title {{ color: #c2410c; font-size: 1.1rem; font-weight: 700; margin-bottom: 10px; }}
+    .ethics-text {{ color: #9a3412; font-size: 0.9rem; line-height: 1.6; }}
     .guide-label {{ font-size: 1.1rem; font-weight: 700; color: #0f172a; margin-bottom: 8px; }}
     .guide-text {{ font-size: 0.9rem; color: #64748b; line-height: 1.6; }}
     
@@ -91,27 +93,28 @@ def create_pro_report(m_name, r_df, interpretation, plot_b=None, assump_list=Non
 
     # 2. Results
     doc.add_heading('2. Statistical Results', level=1)
-    if extra_info: doc.add_paragraph(f"Note: {extra_info}")
-    
     if r_df is not None:
         t = doc.add_table(r_df.shape[0]+1, r_df.shape[1]); t.style = 'Table Grid'
         for j, c in enumerate(r_df.columns): t.cell(0,j).text = str(c)
         for i in range(r_df.shape[0]):
             for j in range(r_df.shape[1]): t.cell(i+1,j).text = str(r_df.values[i,j])
-            
+    
+    if extra_info: doc.add_paragraph(f"\n[Additional Metrics]\n{extra_info}")
+    
     # 3. Visualization
     if plot_b:
         doc.add_heading('3. Visualization', level=1)
         doc.add_picture(plot_b, width=Inches(3.8))
+        doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
     
     # 4. Guide
     doc.add_heading('4. Writing Guide (APA Style)', level=1)
     doc.add_paragraph("※ This guide serves as a scaffold for your manuscript. Please verify and refine.")
-    doc.add_paragraph(interpretation.replace("<b>", "").replace("</b>", ""))
+    doc.add_paragraph(interpretation)
     
     bio = io.BytesIO(); doc.save(bio); bio.seek(0); return bio
 
-# [Scaffolding 적용]
+# [대학생 Scaffolding 적용]
 STAT_MENTOR = {
     "기술통계": {
         "purpose": "수집된 데이터가 전반적으로 어떻게 생겼는지(분포) 요약해서 보여줍니다.",
@@ -161,7 +164,7 @@ STAT_MENTOR = {
     "회귀분석": {
         "purpose": "원인 변수(X)가 결과 변수(Y)에 얼마나 영향을 미치는지 예측합니다.",
         "indicator": "R²는 설명력을, Beta는 영향력의 강도를 뜻합니다. (p < 0.05여야 유의)",
-        "check": "변수끼리 너무 비슷하지 않은지(다중공선성 VIF < 10) 확인해야 합니다."
+        "check": "독립변수 간 중복(VIF), 잔차의 독립성(Durbin-Watson), 그리고 선형성(산점도)을 모두 점검해야 합니다."
     }
 }
 
@@ -281,7 +284,7 @@ if up_file:
             else: assump_report.append(f'<div class="assumption-fail">⚠️ 기대빈도 가정 위배 ({pct_under_5:.1f}% > 20%)</div>')
             
             sig_txt = "유의한 연관성이 있습니다" if p < 0.05 else "유의한 연관성이 없습니다"
-            interp = f"📌 [카이제곱 검정 해석]<br>분석 결과, **'{r}'**와 **'{c}'** 변수 간에는 통계적으로 **{sig_txt}** (χ²={chi2:.3f}, p{format_p(p)})."
+            interp = f"📌 [카이제곱 검정 해석]<br>분석 결과, '{r}'와 '{c}' 변수 간에는 통계적으로 {sig_txt} (χ²={chi2:.3f}, p{format_p(p)})."
 
     elif method == "단일표본 T-검정":
         y = st.selectbox("검정 변수 (연속형)", num_cols); ref = st.number_input("비교할 기준값 (Test Value)", value=0.0)
@@ -297,7 +300,7 @@ if up_file:
             
             diff_dir = "높게" if data.mean() > ref else "낮게"
             sig_txt = f"통계적으로 유의하게 {diff_dir} 나타났습니다" if p < 0.05 else "통계적으로 유의한 차이가 없었습니다"
-            interp = f"📌 [단일표본 T-검정 해석]<br>표본의 평균({data.mean():.2f})은 기준값({ref})보다 **{sig_txt}** (t={stat:.3f}, p{format_p(p)})."
+            interp = f"📌 [단일표본 T-검정 해석]<br>표본의 평균({data.mean():.2f})은 기준값({ref})보다 {sig_txt} (t={stat:.3f}, p{format_p(p)})."
 
     elif method == "독립표본 T-검정":
         g = st.selectbox("집단 변수 (범주형: 2집단)", all_cols); y = st.selectbox("검정 변수 (연속형)", num_cols)
@@ -325,7 +328,7 @@ if up_file:
                 
                 comp = "높게" if g1.mean() > g2.mean() else "낮게"
                 res_txt = f"{gps[0]} 집단(M={g1.mean():.2f})이 {gps[1]} 집단(M={g2.mean():.2f})보다 유의하게 {comp} 나타났습니다" if p < 0.05 else "두 집단 간 유의한 차이가 없었습니다"
-                interp = f"📌 [독립표본 T-검정 해석]<br>분석 결과, **{res_txt}** (t={stat:.3f}, p{format_p(p)}). 효과 크기(Cohen's d)는 {d:.2f}로 {interpret_cohen_d(d)} 수준입니다."
+                interp = f"📌 [독립표본 T-검정 해석]<br>분석 결과, {res_txt} (t={stat:.3f}, p{format_p(p)}). 효과 크기(Cohen's d)는 {d:.2f}로 {interpret_cohen_d(d)} 수준입니다."
 
     elif method == "대응표본 T-검정":
         y1 = st.selectbox("사전 변수 (연속형)", num_cols); y2 = st.selectbox("사후 변수 (연속형)", num_cols)
@@ -343,17 +346,15 @@ if up_file:
             
             change = "증가" if diff.mean() > 0 else "감소"
             sig_txt = f"통계적으로 유의하게 {change}했습니다" if p < 0.05 else "통계적으로 유의한 변화가 없었습니다"
-            interp = f"📌 [대응표본 T-검정 해석]<br>사후 점수는 사전 점수에 비해 **{sig_txt}** (t={stat:.3f}, p{format_p(p)})."
+            interp = f"📌 [대응표본 T-검정 해석]<br>사후 점수는 사전 점수에 비해 {sig_txt} (t={stat:.3f}, p{format_p(p)})."
 
     elif method == "분산분석(ANOVA)":
         g = st.selectbox("집단 변수 (범주형: 3집단 이상)", all_cols); y = st.selectbox("검정 변수 (연속형)", num_cols)
         if st.button("통계 분석 실행"):
-            # 데이터 전처리 및 모델링
             sub_df = df[[g, y]].dropna()
             model = ols(f'Q("{y}") ~ C(Q("{g}"))', data=sub_df).fit()
             res = anova_lm(model, typ=2); p_val = res.iloc[0,3]
             
-            # 가정 검정
             resid = model.resid
             if len(resid) >= 3:
                 _, p_norm = stats.shapiro(resid)
@@ -365,19 +366,17 @@ if up_file:
             if p_levene > 0.05: assump_report.append(f'<div class="assumption-pass">✅ 등분산성 충족 (p={p_levene:.3f})</div>')
             else: assump_report.append(f'<div class="assumption-fail">⚠️ 등분산성 위배 (p={p_levene:.3f})</div>')
 
-            # 결과 정리
             eta = model.rsquared; es_eval = "Large" if eta > 0.14 else "Medium" if eta > 0.06 else "Small"
-            anova_info = f"- **Effect Size (η²):** {eta:.3f} ({es_eval})"
+            anova_info = f"- Effect Size (η²): {eta:.3f} ({es_eval})"
             
             final_df = res.reset_index().rename(columns={'index':'Source (변동원)', 'PR(>F)':'p (유의확률)'}).round(3)
             
-            # Writing Guide (Scaffolded)
             df1, df2 = int(res.iloc[0,1]), int(res.iloc[1,1]); f_val = res.iloc[0,2]
             sig_txt = "통계적으로 유의한 차이가 있었습니다" if p_val < 0.05 else "통계적으로 유의한 차이가 없었습니다"
             interp = (f"📌 [ANOVA 해석 가이드]<br>"
-                      f"일원배치 분산분석 결과, 집단 간 **{y}**의 평균은 **{sig_txt}** "
+                      f"일원배치 분산분석 결과, 집단 간 {y}의 평균은 {sig_txt} "
                       f"(F({df1}, {df2}) = {f_val:.3f}, p {format_p(p_val)}). "
-                      f"효과 크기(η²)는 {eta:.3f}로 **{es_eval}** 수준입니다.")
+                      f"효과 크기(η²)는 {eta:.3f}로 {es_eval} 수준입니다.")
             
             if p_val < 0.05:
                 tukey = pairwise_tukeyhsd(sub_df[y], sub_df[g]); st.info("💡 사후검정(Tukey) 결과"); st.text(str(tukey))
@@ -397,7 +396,7 @@ if up_file:
             it = df[vs].dropna(); k = it.shape[1]; alpha = (k/(k-1)) * (1 - (it.var(ddof=1).sum() / it.sum(axis=1).var(ddof=1)))
             final_df = pd.DataFrame({"Cronbach α (계수)": [f"{alpha:.3f}"]})
             rel_txt = "매우 양호" if alpha > 0.8 else "양호" if alpha > 0.7 else "부족"
-            interp = f"📌 [신뢰도 해석]<br>Cronbach's α 계수는 **{alpha:.3f}**로, 도구의 신뢰도는 **'{rel_txt}'**한 수준입니다."
+            interp = f"📌 [신뢰도 해석]<br>Cronbach's α 계수는 {alpha:.3f}로, 도구의 신뢰도는 '{rel_txt}'한 수준입니다."
 
     elif method == "회귀분석":
         rtype = st.radio("회귀 유형", ["선형 회귀분석 (Linear)", "로지스틱 회귀분석 (Logistic)"])
@@ -429,7 +428,7 @@ if up_file:
                     plt.figure(figsize=(6,5)); plt.scatter(model.fittedvalues, model.resid); plt.title("Residual vs Fitted"); plot_img = get_plot_buffer()
                 
                 sig_txt = "유의하게 설명하고 있습니다" if p_val < 0.05 else "유의하게 설명하지 못하고 있습니다"
-                interp = f"📌 [회귀분석 해석]<br>회귀모형은 종속변수({y})를 통계적으로 **{sig_txt}** (F={model.fvalue:.3f}, p{format_p(p_val)}). 모델의 설명력(R²)은 **{model.rsquared:.3f}**입니다."
+                interp = f"📌 [회귀분석 해석]<br>회귀모형은 종속변수({y})를 통계적으로 {sig_txt} (F={model.fvalue:.3f}, p{format_p(p_val)}). 모델의 설명력(R²)은 {model.rsquared:.3f}입니다."
             else:
                 if reg_d[y].dtype == 'object':
                     from sklearn.preprocessing import LabelEncoder
@@ -441,7 +440,7 @@ if up_file:
                     "Predictor (독립변수)": model.params.index, "B (Coeff)": model.params.values, 
                     "OR (Odds Ratio)": np.exp(model.params.values), "p (Sig)": model.pvalues.apply(format_p).values
                 }).round(3).reset_index(drop=True)
-                interp = f"📌 [로지스틱 회귀 해석]<br>모형의 유의확률은 **p{format_p(p_val)}**입니다. OR(오즈비)이 1보다 크면 해당 변수가 증가할수록 사건 발생 확률이 높아짐을 의미합니다."
+                interp = f"📌 [로지스틱 회귀 해석]<br>모형의 유의확률은 p{format_p(p_val)}입니다. OR(오즈비)이 1보다 크면 해당 변수가 증가할수록 사건 발생 확률이 높아짐을 의미합니다."
 
     # --- Step 03: 결과 대시보드 ---
     if final_df is not None:
