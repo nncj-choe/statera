@@ -22,14 +22,14 @@ from docx.oxml.ns import qn
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="STATERA", page_icon="🎓", layout="wide")
 
-# 한글 폰트 자동 설정 (그래프 깨짐 방지)
+# 한글 폰트 설정
 system_name = platform.system()
 if system_name == 'Windows':
     plt.rc('font', family='Malgun Gothic')
 elif system_name == 'Darwin': # Mac
     plt.rc('font', family='AppleGothic')
 else:
-    plt.rc('font', family='NanumGothic') # Linux/Streamlit Cloud
+    plt.rc('font', family='NanumGothic')
 plt.rcParams['axes.unicode_minus'] = False
 sns.set_theme(style="whitegrid", font=plt.rcParams['font.family'])
 
@@ -41,7 +41,6 @@ st.markdown(f"""
     * {{ font-family: 'Pretendard', sans-serif; }}
     .main-header {{ color: #0d9488; text-align: center; font-size: 2.8rem; font-weight: 800; margin-bottom: 5px; }}
     .sub-header {{ text-align: center; color: #64748b; font-size: 1.1rem; margin-bottom: 40px; }}
-    
     .guide-container {{ display: flex; gap: 20px; margin-bottom: 30px; }}
     .guide-box {{ flex: 1; background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); }}
     .guide-label {{ font-size: 1.1rem; font-weight: 700; color: #0f172a; margin-bottom: 8px; display: flex; align-items: center; }}
@@ -64,6 +63,7 @@ st.markdown(f"""
     div[data-testid="stRadio"] > div {{ flex-direction: row; gap: 20px; overflow-x: auto; }}
     .stButton>button {{ width: 100%; border-radius: 12px; background: #0d9488; color: white; font-weight: 700; height: 3.8em; border: none; transition: 0.4s; }}
     
+    /* 테이블 헤더 숨김 처리 */
     thead tr th:first-child {{ display:none }}
     tbody th {{ display:none }}
 </style>
@@ -121,7 +121,7 @@ def create_pro_report(m_name, r_df, interpretation, plot_b=None, assump_list=Non
     
     bio = io.BytesIO(); doc.save(bio); bio.seek(0); return bio
 
-# [Scaffolding 적용]
+# [대학생 Scaffolding 적용]
 STAT_MENTOR = {
     "기술통계": {
         "purpose": "수집된 데이터가 전반적으로 어떻게 생겼는지(분포) 요약해서 보여줍니다.",
@@ -159,7 +159,7 @@ STAT_MENTOR = {
         "check": "모든 집단의 분산이 비슷해야 하며(등분산성), 잔차가 정규성을 띄어야 합니다."
     },
     "상관분석": {
-        "purpose": "두 변수가 함께 증가하거나 반대 방향으로 향하는 직선 관계인지 확인합니다.",
+        "purpose": "두 변수가 함께 증가(양)하거나, 서로 반대 방향으로 움직이는(음) 직선 관계인지 확인합니다.",
         "indicator": "상관계수 r이 +1에 가까우면 강한 양의 관계, -1이면 강한 음의 관계입니다.",
         "check": "두 변수의 관계가 곡선이 아닌 직선 형태인지 산점도로 확인해야 합니다."
     },
@@ -170,13 +170,13 @@ STAT_MENTOR = {
     },
     "회귀분석": {
         "purpose": "원인 변수(X)가 결과 변수(Y)에 얼마나 영향을 미치는지 예측합니다.",
-        "indicator": "R²는 설명력을, Beta는 영향력의 강도를 뜻합니다.",
+        "indicator": "R²는 설명력을, Beta는 영향력의 강도를 뜻합니다. (p < 0.05여야 유의)",
         "check": "변수끼리 너무 비슷하지 않은지(다중공선성 VIF < 10) 확인해야 합니다."
     }
 }
 
 # -----------------------------------------------------------------------------
-# 3. 사이드바
+# 3. 사이드바 (원본 100% 동일)
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("<h1 style='color:#0d9488;'>STATERA 📊</h1>", unsafe_allow_html=True)
@@ -224,7 +224,7 @@ if up_file:
         st.error(f"데이터 로드 중 오류가 발생했습니다: {e}")
         st.stop()
 
-    # Step 1
+    # Step 1: 분석 기법 선택
     st.markdown('<div class="section-title"><span class="step-badge">01</span> 연구 목적에 따른 분석 기법 선택</div>', unsafe_allow_html=True)
     group = st.selectbox("분석 범주를 선택하십시오.", [
         "기초 데이터 분석 (Descriptive/Frequency)", 
@@ -252,7 +252,7 @@ if up_file:
     </div>
     """, unsafe_allow_html=True)
 
-    # Step 2
+    # Step 2: 변수 설정 및 실행
     st.markdown('<div class="section-title"><span class="step-badge">02</span> 분석 변수 설정 및 실행</div>', unsafe_allow_html=True)
     final_df, p_val, interp, plot_img, assump_report = None, None, "", None, []
     extra_metric_text, anova_info, reg_anova_df = None, None, None
@@ -438,7 +438,7 @@ if up_file:
                 st.dataframe(reg_anova_df, use_container_width=True, hide_index=True)
             st.markdown("##### 📋 통계량 상세표")
             st.dataframe(final_df, use_container_width=True, hide_index=True)
-            if anova_model_info: st.info(f"📊 모형 요약 정보\n{anova_model_info}")
+            if anova_info: st.info(f"📊 모형 요약 정보\n{anova_info}")
             
         with col_main_R:
             st.markdown("##### 💡 Writing Guide")
