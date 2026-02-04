@@ -258,7 +258,7 @@ if up_file:
             if abs(skew)<3 and abs(kurt)<10: assump_report.append(f'<div class="assumption-pass">✅ 왜도({skew:.2f})/첨도({kurt:.2f}) 기준 충족 (정규성 만족)</div>')
             else: assump_report.append(f'<div class="assumption-fail">⚠️ 왜도/첨도 기준 초과 (정규성 위배 가능성)</div>')
             plt.figure(figsize=(6,3)); sns.histplot(df[v].dropna(), kde=True, color="#0d9488"); plot_img = get_plot_buffer()
-            interp = f"📌 **[기술통계 해석 가이드]**<br>'{v}' 변수의 평균은 {df[v].mean():.2f}, 표준편차는 {df[v].std():.2f}입니다. 왜도와 첨도가 기준 절대값(왜도<3, 첨도<10) 이내에 있다면 정규분포를 따른다고 가정할 수 있습니다."
+            interp = f"📌 [기술통계 해석 가이드]<br>'{v}' 변수의 평균은 {df[v].mean():.2f}, 표준편차는 {df[v].std():.2f}입니다. 왜도와 첨도가 기준 절대값(왜도<3, 첨도<10) 이내에 있다면 정규분포를 따른다고 가정할 수 있습니다."
 
     elif method == "빈도분석":
         vs = st.multiselect("분석할 변수들 (범주형)", all_cols)
@@ -269,7 +269,7 @@ if up_file:
                 counts.columns = ['Category (범주)', 'Frequency (빈도)']
                 counts['Percent (%)'] = (counts['Frequency (빈도)'] / counts['Frequency (빈도)'].sum() * 100).round(1)
                 counts.insert(0, 'Variable (변수명)', c); res.append(counts)
-            final_df = pd.concat(res); interp = "📌 **[빈도분석 해석 가이드]**<br>각 범주의 빈도(n)와 비율(%)을 확인하십시오. 비율이 한 쪽으로 지나치게 쏠려 있지 않은지 점검하는 것이 중요합니다."
+            final_df = pd.concat(res); interp = "📌 [빈도분석 해석 가이드]<br>각 범주의 빈도(n)와 비율(%)을 확인하십시오. 비율이 한 쪽으로 지나치게 쏠려 있지 않은지 점검하는 것이 중요합니다."
 
     elif method == "카이제곱 검정":
         r = st.selectbox("행 변수 (범주형)", all_cols); c = st.selectbox("열 변수 (범주형)", all_cols)
@@ -281,7 +281,7 @@ if up_file:
             else: assump_report.append(f'<div class="assumption-fail">⚠️ 기대빈도 가정 위배 ({pct_under_5:.1f}% > 20%)</div>')
             
             sig_txt = "유의한 연관성이 있습니다" if p < 0.05 else "유의한 연관성이 없습니다"
-            interp = f"📌 **[카이제곱 검정 해석]**<br>분석 결과, **'{r}'**와 **'{c}'** 변수 간에는 통계적으로 **{sig_txt}** (χ²={chi2:.3f}, p{format_p(p)})."
+            interp = f"📌 [카이제곱 검정 해석]<br>분석 결과, **'{r}'**와 **'{c}'** 변수 간에는 통계적으로 **{sig_txt}** (χ²={chi2:.3f}, p{format_p(p)})."
 
     elif method == "단일표본 T-검정":
         y = st.selectbox("검정 변수 (연속형)", num_cols); ref = st.number_input("비교할 기준값 (Test Value)", value=0.0)
@@ -297,7 +297,7 @@ if up_file:
             
             diff_dir = "높게" if data.mean() > ref else "낮게"
             sig_txt = f"통계적으로 유의하게 {diff_dir} 나타났습니다" if p < 0.05 else "통계적으로 유의한 차이가 없었습니다"
-            interp = f"📌 **[단일표본 T-검정 해석]**<br>표본의 평균({data.mean():.2f})은 기준값({ref})보다 **{sig_txt}** (t={stat:.3f}, p{format_p(p)})."
+            interp = f"📌 [단일표본 T-검정 해석]<br>표본의 평균({data.mean():.2f})은 기준값({ref})보다 **{sig_txt}** (t={stat:.3f}, p{format_p(p)})."
 
     elif method == "독립표본 T-검정":
         g = st.selectbox("집단 변수 (범주형: 2집단)", all_cols); y = st.selectbox("검정 변수 (연속형)", num_cols)
@@ -325,7 +325,7 @@ if up_file:
                 
                 comp = "높게" if g1.mean() > g2.mean() else "낮게"
                 res_txt = f"{gps[0]} 집단(M={g1.mean():.2f})이 {gps[1]} 집단(M={g2.mean():.2f})보다 유의하게 {comp} 나타났습니다" if p < 0.05 else "두 집단 간 유의한 차이가 없었습니다"
-                interp = f"📌 **[독립표본 T-검정 해석]**<br>분석 결과, **{res_txt}** (t={stat:.3f}, p{format_p(p)}). 효과 크기(Cohen's d)는 {d:.2f}로 {interpret_cohen_d(d)} 수준입니다."
+                interp = f"📌 [독립표본 T-검정 해석]<br>분석 결과, **{res_txt}** (t={stat:.3f}, p{format_p(p)}). 효과 크기(Cohen's d)는 {d:.2f}로 {interpret_cohen_d(d)} 수준입니다."
 
     elif method == "대응표본 T-검정":
         y1 = st.selectbox("사전 변수 (연속형)", num_cols); y2 = st.selectbox("사후 변수 (연속형)", num_cols)
@@ -343,7 +343,7 @@ if up_file:
             
             change = "증가" if diff.mean() > 0 else "감소"
             sig_txt = f"통계적으로 유의하게 {change}했습니다" if p < 0.05 else "통계적으로 유의한 변화가 없었습니다"
-            interp = f"📌 **[대응표본 T-검정 해석]**<br>사후 점수는 사전 점수에 비해 **{sig_txt}** (t={stat:.3f}, p{format_p(p)})."
+            interp = f"📌 [대응표본 T-검정 해석]<br>사후 점수는 사전 점수에 비해 **{sig_txt}** (t={stat:.3f}, p{format_p(p)})."
 
     elif method == "분산분석(ANOVA)":
         g = st.selectbox("집단 변수 (범주형: 3집단 이상)", all_cols); y = st.selectbox("검정 변수 (연속형)", num_cols)
@@ -374,7 +374,7 @@ if up_file:
             # Writing Guide (Scaffolded)
             df1, df2 = int(res.iloc[0,1]), int(res.iloc[1,1]); f_val = res.iloc[0,2]
             sig_txt = "통계적으로 유의한 차이가 있었습니다" if p_val < 0.05 else "통계적으로 유의한 차이가 없었습니다"
-            interp = (f"📌 **[ANOVA 해석 가이드]**<br>"
+            interp = (f"📌 [ANOVA 해석 가이드]<br>"
                       f"일원배치 분산분석 결과, 집단 간 **{y}**의 평균은 **{sig_txt}** "
                       f"(F({df1}, {df2}) = {f_val:.3f}, p {format_p(p_val)}). "
                       f"효과 크기(η²)는 {eta:.3f}로 **{es_eval}** 수준입니다.")
@@ -389,7 +389,7 @@ if up_file:
             p_m = pd.DataFrame([[format_p(stats.pearsonr(df[i].dropna(), df[j].dropna())[1]) if i!=j else "-" for j in vs] for i in vs], index=vs, columns=vs)
             final_df = corr_m.astype(str) + " (p=" + p_m.astype(str) + ")"
             plt.figure(figsize=(6,5)); sns.heatmap(corr_m, annot=True, cmap="coolwarm"); plot_img = get_plot_buffer()
-            interp = "📌 **[상관분석 해석]**<br>상관계수(r)가 0.7 이상이면 강한 양의 상관, -0.7 이하이면 강한 음의 상관관계가 있다고 해석합니다. p < .05 인 경우 해당 관계는 통계적으로 유의합니다."
+            interp = "📌 [상관분석 해석]<br>상관계수(r)가 0.7 이상이면 강한 양의 상관, -0.7 이하이면 강한 음의 상관관계가 있다고 해석합니다. p < .05 인 경우 해당 관계는 통계적으로 유의합니다."
 
     elif method == "신뢰도 분석":
         vs = st.multiselect("신뢰도 분석할 문항군 선택 (연속형)", num_cols)
@@ -397,7 +397,7 @@ if up_file:
             it = df[vs].dropna(); k = it.shape[1]; alpha = (k/(k-1)) * (1 - (it.var(ddof=1).sum() / it.sum(axis=1).var(ddof=1)))
             final_df = pd.DataFrame({"Cronbach α (계수)": [f"{alpha:.3f}"]})
             rel_txt = "매우 양호" if alpha > 0.8 else "양호" if alpha > 0.7 else "부족"
-            interp = f"📌 **[신뢰도 해석]**<br>Cronbach's α 계수는 **{alpha:.3f}**로, 도구의 신뢰도는 **'{rel_txt}'**한 수준입니다."
+            interp = f"📌 [신뢰도 해석]<br>Cronbach's α 계수는 **{alpha:.3f}**로, 도구의 신뢰도는 **'{rel_txt}'**한 수준입니다."
 
     elif method == "회귀분석":
         rtype = st.radio("회귀 유형", ["선형 회귀분석 (Linear)", "로지스틱 회귀분석 (Logistic)"])
@@ -429,7 +429,7 @@ if up_file:
                     plt.figure(figsize=(6,5)); plt.scatter(model.fittedvalues, model.resid); plt.title("Residual vs Fitted"); plot_img = get_plot_buffer()
                 
                 sig_txt = "유의하게 설명하고 있습니다" if p_val < 0.05 else "유의하게 설명하지 못하고 있습니다"
-                interp = f"📌 **[회귀분석 해석]**<br>회귀모형은 종속변수({y})를 통계적으로 **{sig_txt}** (F={model.fvalue:.3f}, p{format_p(p_val)}). 모델의 설명력(R²)은 **{model.rsquared:.3f}**입니다."
+                interp = f"📌 [회귀분석 해석]<br>회귀모형은 종속변수({y})를 통계적으로 **{sig_txt}** (F={model.fvalue:.3f}, p{format_p(p_val)}). 모델의 설명력(R²)은 **{model.rsquared:.3f}**입니다."
             else:
                 if reg_d[y].dtype == 'object':
                     from sklearn.preprocessing import LabelEncoder
@@ -441,7 +441,7 @@ if up_file:
                     "Predictor (독립변수)": model.params.index, "B (Coeff)": model.params.values, 
                     "OR (Odds Ratio)": np.exp(model.params.values), "p (Sig)": model.pvalues.apply(format_p).values
                 }).round(3).reset_index(drop=True)
-                interp = f"📌 **[로지스틱 회귀 해석]**<br>모형의 유의확률은 **p{format_p(p_val)}**입니다. OR(오즈비)이 1보다 크면 해당 변수가 증가할수록 사건 발생 확률이 높아짐을 의미합니다."
+                interp = f"📌 [로지스틱 회귀 해석]<br>모형의 유의확률은 **p{format_p(p_val)}**입니다. OR(오즈비)이 1보다 크면 해당 변수가 증가할수록 사건 발생 확률이 높아짐을 의미합니다."
 
     # --- Step 03: 결과 대시보드 ---
     if final_df is not None:
