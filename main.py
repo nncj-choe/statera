@@ -22,7 +22,7 @@ from docx.oxml.ns import qn
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="STATERA", page_icon="🎓", layout="wide")
 
-# 한글 폰트 설정 (깨짐 방지)
+# 한글 폰트 설정
 system_name = platform.system()
 if system_name == 'Windows':
     plt.rc('font', family='Malgun Gothic')
@@ -41,28 +41,18 @@ st.markdown(f"""
     * {{ font-family: 'Pretendard', sans-serif; }}
     .main-header {{ color: #0d9488; text-align: center; font-size: 2.8rem; font-weight: 800; margin-bottom: 5px; }}
     .sub-header {{ text-align: center; color: #64748b; font-size: 1.1rem; margin-bottom: 40px; }}
-    
     .guide-container {{ display: flex; gap: 20px; margin-bottom: 30px; }}
-    .guide-box {{ flex: 1; background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); }}
-    .guide-label {{ font-size: 1.1rem; font-weight: 700; color: #0f172a; margin-bottom: 8px; display: flex; align-items: center; }}
-    .guide-text {{ font-size: 0.9rem; color: #64748b; line-height: 1.6; }}
-
+    .guide-box {{ flex: 1; background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; }}
     .mentor-box {{ background-color: #f0fdfa; border-left: 6px solid #0d9488; padding: 25px; border-radius: 12px; margin-bottom: 30px; }}
-    .mentor-title {{ color: #0f766e; font-size: 1.3rem; font-weight: 700; margin-bottom: 12px; }}
-    .mentor-content {{ color: #1e293b; font-size: 1rem; line-height: 1.8; }}
-
-    .section-title {{ font-size: 1.6rem; font-weight: 800; color: #0f172a; margin-top: 50px; margin-bottom: 25px; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; display: flex; align-items: center; }}
-    .step-badge {{ background: #0d9488; color: white; border-radius: 8px; padding: 4px 15px; font-size: 0.9rem; margin-right: 15px; vertical-align: middle; }}
-
     .assumption-pass {{ background-color: #dcfce7; color: #166534; padding: 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #bbf7d0; font-weight: 600; font-size: 0.95rem; }}
     .assumption-fail {{ background-color: #fee2e2; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #fecaca; font-weight: 600; font-size: 0.95rem; }}
-    
-    .ethics-container {{ background-color: #fff7ed; border: 1px solid #ffedd5; border-radius: 12px; padding: 20px; margin-top: 50px; margin-bottom: 30px; }}
-    .ethics-title {{ color: #c2410c; font-size: 1.1rem; font-weight: 700; margin-bottom: 10px; }}
-    .ethics-text {{ color: #9a3412; font-size: 0.9rem; line-height: 1.6; }}
-
+    .section-title {{ font-size: 1.6rem; font-weight: 800; color: #0f172a; margin-top: 50px; margin-bottom: 25px; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; }}
+    .step-badge {{ background: #0d9488; color: white; border-radius: 8px; padding: 4px 15px; font-size: 0.9rem; margin-right: 15px; vertical-align: middle; }}
     div[data-testid="stRadio"] > div {{ flex-direction: row; gap: 20px; overflow-x: auto; }}
     .stButton>button {{ width: 100%; border-radius: 12px; background: #0d9488; color: white; font-weight: 700; height: 3.8em; border: none; transition: 0.4s; }}
+    .ethics-container {{ background-color: #fff7ed; border: 1px solid #ffedd5; border-radius: 12px; padding: 20px; margin-top: 50px; margin-bottom: 30px; }}
+    .guide-label {{ font-size: 1.1rem; font-weight: 700; color: #0f172a; margin-bottom: 8px; }}
+    .guide-text {{ font-size: 0.9rem; color: #64748b; line-height: 1.6; }}
     
     /* 테이블 헤더 숨김 처리 */
     thead tr th:first-child {{ display:none }}
@@ -73,18 +63,17 @@ st.markdown(f"""
 # -----------------------------------------------------------------------------
 # 2. 유틸리티 함수
 # -----------------------------------------------------------------------------
-def format_p(p): return "<.001" if p < .001 else f"{p:.3f}"
+def format_p(p): return "< .001" if p < .001 else f"= {p:.3f}"
 def get_plot_buffer():
     buf = io.BytesIO(); plt.savefig(buf, format='png', bbox_inches='tight', dpi=300); buf.seek(0); plt.close(); return buf
 
 def interpret_cohen_d(d):
     d = abs(d)
-    if d < 0.2: return "Negligible"
-    elif d < 0.5: return "Small"
-    elif d < 0.8: return "Medium"
-    else: return "Large"
+    if d < 0.2: return "거의 없음 (Negligible)"
+    elif d < 0.5: return "작음 (Small)"
+    elif d < 0.8: return "중간 (Medium)"
+    else: return "큼 (Large)"
 
-# 리포트 생성 함수
 def create_pro_report(m_name, r_df, interpretation, plot_b=None, assump_list=None, extra_info=None):
     doc = Document()
     doc.styles['Normal'].font.name = 'Malgun Gothic'
@@ -102,19 +91,18 @@ def create_pro_report(m_name, r_df, interpretation, plot_b=None, assump_list=Non
 
     # 2. Results
     doc.add_heading('2. Statistical Results', level=1)
+    if extra_info: doc.add_paragraph(f"Note: {extra_info}")
+    
     if r_df is not None:
         t = doc.add_table(r_df.shape[0]+1, r_df.shape[1]); t.style = 'Table Grid'
         for j, c in enumerate(r_df.columns): t.cell(0,j).text = str(c)
         for i in range(r_df.shape[0]):
             for j in range(r_df.shape[1]): t.cell(i+1,j).text = str(r_df.values[i,j])
-    
-    if extra_info: doc.add_paragraph(f"\n[Additional Metrics]\n{extra_info}")
-    
+            
     # 3. Visualization
     if plot_b:
         doc.add_heading('3. Visualization', level=1)
         doc.add_picture(plot_b, width=Inches(3.8))
-        doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
     
     # 4. Guide
     doc.add_heading('4. Writing Guide (APA Style)', level=1)
@@ -123,7 +111,7 @@ def create_pro_report(m_name, r_df, interpretation, plot_b=None, assump_list=Non
     
     bio = io.BytesIO(); doc.save(bio); bio.seek(0); return bio
 
-# [대학생 Scaffolding + 4개 카테고리 구조]
+# [Scaffolding 적용]
 STAT_MENTOR = {
     "기술통계": {
         "purpose": "수집된 데이터가 전반적으로 어떻게 생겼는지(분포) 요약해서 보여줍니다.",
@@ -136,7 +124,7 @@ STAT_MENTOR = {
         "check": "응답이 누락된 결측치가 분석에 포함되었는지 확인해야 합니다."
     },
     "카이제곱 검정": {
-        "purpose": "두 범주형 변수(예: 성별-찬반)가 서로 관련이 있는지, 독립적인지 봅니다.",
+        "purpose": "두 범주형 변수(예: 성별)가 서로 관련이 있는지, 독립적인지 봅니다.",
         "indicator": "p < 0.05라면 두 변수는 서로 통계적으로 유의한 관련성이 있습니다.",
         "check": "기대빈도가 5보다 작은 셀이 전체의 20%를 넘지 않아야 신뢰할 수 있습니다."
     },
@@ -178,7 +166,7 @@ STAT_MENTOR = {
 }
 
 # -----------------------------------------------------------------------------
-# 3. 사이드바 
+# 3. 사이드바
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("<h1 style='color:#0d9488;'>STATERA 📊</h1>", unsafe_allow_html=True)
@@ -226,13 +214,13 @@ if up_file:
         st.error(f"데이터 로드 중 오류가 발생했습니다: {e}")
         st.stop()
 
-    # Step 1
+    # Step 1: 분석 기법 선택
     st.markdown('<div class="section-title"><span class="step-badge">01</span> 연구 목적에 따른 분석 기법 선택</div>', unsafe_allow_html=True)
     group = st.selectbox("분석 범주를 선택하십시오.", [
-        "기초 데이터 분석 (Descriptive/Frequency)", 
-        "집단 간 차이 검정 (T-test/ANOVA)", 
-        "관계 및 영향력 분석 (Chi2/Corr/Regression)",
-        "척도 신뢰도 분석 (Reliability)"
+        "기초 데이터 분석", 
+        "집단 간 차이 검정", 
+        "관계 및 영향력 분석",
+        "척도 신뢰도 분석"
     ])
     
     if "기초" in group: m_list = ["기술통계", "빈도분석"]
@@ -254,7 +242,7 @@ if up_file:
     </div>
     """, unsafe_allow_html=True)
 
-    # Step 2
+    # Step 2: 변수 설정 및 실행
     st.markdown('<div class="section-title"><span class="step-badge">02</span> 분석 변수 설정 및 실행</div>', unsafe_allow_html=True)
     final_df, p_val, interp, plot_img, assump_report = None, None, "", None, []
     extra_metric_text, anova_info, reg_anova_df = None, None, None
@@ -270,7 +258,7 @@ if up_file:
             if abs(skew)<3 and abs(kurt)<10: assump_report.append(f'<div class="assumption-pass">✅ 왜도({skew:.2f})/첨도({kurt:.2f}) 기준 충족 (정규성 만족)</div>')
             else: assump_report.append(f'<div class="assumption-fail">⚠️ 왜도/첨도 기준 초과 (정규성 위배 가능성)</div>')
             plt.figure(figsize=(6,3)); sns.histplot(df[v].dropna(), kde=True, color="#0d9488"); plot_img = get_plot_buffer()
-            interp = f"📌 {v}의 평균은 {df[v].mean():.2f}(SD={df[v].std():.2f})입니다."
+            interp = f"📌 **[기술통계 해석 가이드]**<br>'{v}' 변수의 평균은 {df[v].mean():.2f}, 표준편차는 {df[v].std():.2f}입니다. 왜도와 첨도가 기준 절대값(왜도<3, 첨도<10) 이내에 있다면 정규분포를 따른다고 가정할 수 있습니다."
 
     elif method == "빈도분석":
         vs = st.multiselect("분석할 변수들 (범주형)", all_cols)
@@ -281,7 +269,7 @@ if up_file:
                 counts.columns = ['Category (범주)', 'Frequency (빈도)']
                 counts['Percent (%)'] = (counts['Frequency (빈도)'] / counts['Frequency (빈도)'].sum() * 100).round(1)
                 counts.insert(0, 'Variable (변수명)', c); res.append(counts)
-            final_df = pd.concat(res); interp = "각 범주의 빈도(n)와 비율(%) 분포를 확인하십시오."
+            final_df = pd.concat(res); interp = "📌 **[빈도분석 해석 가이드]**<br>각 범주의 빈도(n)와 비율(%)을 확인하십시오. 비율이 한 쪽으로 지나치게 쏠려 있지 않은지 점검하는 것이 중요합니다."
 
     elif method == "카이제곱 검정":
         r = st.selectbox("행 변수 (범주형)", all_cols); c = st.selectbox("열 변수 (범주형)", all_cols)
@@ -289,23 +277,27 @@ if up_file:
             ct = pd.crosstab(df[r], df[c]); chi2, p, _, exp = stats.chi2_contingency(ct)
             p_val = p; final_df = ct.astype(str) + " (" + (ct/ct.sum()*100).round(1).astype(str) + "%)"
             under_5 = (exp < 5).sum(); pct_under_5 = (under_5 / exp.size) * 100
-            if pct_under_5 <= 20: assump_report.append(f'<div class="assumption-pass">✅ 기대빈도 5 미만 셀 {pct_under_5:.1f}% (20% 이하 충족)</div>')
-            else: assump_report.append(f'<div class="assumption-fail">⚠️ 기대빈도 5 미만 셀 {pct_under_5:.1f}% (20% 초과, Fisher 권장)</div>')
-            interp = f"📌 두 변수 간 유의한 연관성이 {'있습니다' if p < 0.05 else '없습니다'} (p={format_p(p)})."
+            if pct_under_5 <= 20: assump_report.append(f'<div class="assumption-pass">✅ 기대빈도 가정 충족 (5미만 셀 {pct_under_5:.1f}%)</div>')
+            else: assump_report.append(f'<div class="assumption-fail">⚠️ 기대빈도 가정 위배 ({pct_under_5:.1f}% > 20%)</div>')
+            
+            sig_txt = "유의한 연관성이 있습니다" if p < 0.05 else "유의한 연관성이 없습니다"
+            interp = f"📌 **[카이제곱 검정 해석]**<br>분석 결과, **'{r}'**와 **'{c}'** 변수 간에는 통계적으로 **{sig_txt}** (χ²={chi2:.3f}, p{format_p(p)})."
 
     elif method == "단일표본 T-검정":
         y = st.selectbox("검정 변수 (연속형)", num_cols); ref = st.number_input("비교할 기준값 (Test Value)", value=0.0)
         if st.button("통계 분석 실행"):
             data = df[y].dropna(); stat, p = stats.ttest_1samp(data, ref); p_val = p
-            if stats.shapiro(data)[1] > 0.05: assump_report.append('<div class="assumption-pass">✅ 정규성 가정 충족 (Shapiro-Wilk)</div>')
+            if stats.shapiro(data)[1] > 0.05: assump_report.append('<div class="assumption-pass">✅ 정규성 가정 충족</div>')
             else: assump_report.append('<div class="assumption-fail">⚠️ 정규성 가정 위배 (비모수 검정 고려)</div>')
             se = data.std(ddof=1) / np.sqrt(len(data)); ci = stats.t.interval(0.95, len(data)-1, loc=data.mean(), scale=se)
             final_df = pd.DataFrame({
                 "Dependent Var. (종속변수)":[y], "Test Value (기준값)":[ref], "Mean (평균)":[data.mean()], 
                 "t (t값)":[stat], "p (유의확률)":[format_p(p)], "95% CI Lower":[ci[0]], "95% CI Upper":[ci[1]]
             }).round(3)
-            diff_text = "높게" if data.mean() > ref else "낮게"
-            interp = f"📌 표본 평균({data.mean():.2f})은 기준값({ref})보다 유의하게 {diff_text} 나타났습니다 (p={format_p(p)})."
+            
+            diff_dir = "높게" if data.mean() > ref else "낮게"
+            sig_txt = f"통계적으로 유의하게 {diff_dir} 나타났습니다" if p < 0.05 else "통계적으로 유의한 차이가 없었습니다"
+            interp = f"📌 **[단일표본 T-검정 해석]**<br>표본의 평균({data.mean():.2f})은 기준값({ref})보다 **{sig_txt}** (t={stat:.3f}, p{format_p(p)})."
 
     elif method == "독립표본 T-검정":
         g = st.selectbox("집단 변수 (범주형: 2집단)", all_cols); y = st.selectbox("검정 변수 (연속형)", num_cols)
@@ -330,9 +322,10 @@ if up_file:
                 }).round(3)
                 extra_metric_text = f"Effect Size (Cohen's d): {d:.3f} [{interpret_cohen_d(d)}]"
                 plt.figure(figsize=(5,4)); sns.boxplot(x=g, y=y, data=df); plot_img = get_plot_buffer()
+                
                 comp = "높게" if g1.mean() > g2.mean() else "낮게"
-                res_txt = f"{gps[0]} 집단이 {gps[1]}보다 유의하게 {comp} 나타났습니다" if p < 0.05 else "두 집단 간 유의한 차이가 없었습니다"
-                interp = f"📌 독립표본 T-검정 결과, {res_txt} (t={stat:.3f}, p={format_p(p)})."
+                res_txt = f"{gps[0]} 집단(M={g1.mean():.2f})이 {gps[1]} 집단(M={g2.mean():.2f})보다 유의하게 {comp} 나타났습니다" if p < 0.05 else "두 집단 간 유의한 차이가 없었습니다"
+                interp = f"📌 **[독립표본 T-검정 해석]**<br>분석 결과, **{res_txt}** (t={stat:.3f}, p{format_p(p)}). 효과 크기(Cohen's d)는 {d:.2f}로 {interpret_cohen_d(d)} 수준입니다."
 
     elif method == "대응표본 T-검정":
         y1 = st.selectbox("사전 변수 (연속형)", num_cols); y2 = st.selectbox("사후 변수 (연속형)", num_cols)
@@ -347,22 +340,47 @@ if up_file:
                 "Pair (변수쌍)": [f"{y1}-{y2}"], "Mean Diff (평균차이)": [diff.mean()], "t (t값)": [stat], "p (유의확률)": [format_p(p)],
                 "95% CI Lower": [ci[0]], "95% CI Upper": [ci[1]]
             }).round(3)
-            interp = f"📌 사후 점수는 사전 점수보다 유의하게 {'증가' if diff.mean()>0 else '감소'}했습니다 (p={format_p(p)})."
+            
+            change = "증가" if diff.mean() > 0 else "감소"
+            sig_txt = f"통계적으로 유의하게 {change}했습니다" if p < 0.05 else "통계적으로 유의한 변화가 없었습니다"
+            interp = f"📌 **[대응표본 T-검정 해석]**<br>사후 점수는 사전 점수에 비해 **{sig_txt}** (t={stat:.3f}, p{format_p(p)})."
 
     elif method == "분산분석(ANOVA)":
         g = st.selectbox("집단 변수 (범주형: 3집단 이상)", all_cols); y = st.selectbox("검정 변수 (연속형)", num_cols)
         if st.button("통계 분석 실행"):
-            model = ols(f'{y} ~ C({g})', data=df).fit(); res = anova_lm(model, typ=2); p_val = res.iloc[0,3]
-            grps = [df[df[g]==k][y].dropna() for k in df[g].unique()]
-            if stats.levene(*grps)[1] > 0.05: assump_report.append('<div class="assumption-pass">✅ 등분산성 가정 충족</div>')
-            else: assump_report.append('<div class="assumption-fail">⚠️ 등분산성 위배 (Welch ANOVA 권장)</div>')
+            # 데이터 전처리 및 모델링
+            sub_df = df[[g, y]].dropna()
+            model = ols(f'Q("{y}") ~ C(Q("{g}"))', data=sub_df).fit()
+            res = anova_lm(model, typ=2); p_val = res.iloc[0,3]
+            
+            # 가정 검정
+            resid = model.resid
+            if len(resid) >= 3:
+                _, p_norm = stats.shapiro(resid)
+                if p_norm > 0.05: assump_report.append(f'<div class="assumption-pass">✅ 잔차 정규성 충족 (p={p_norm:.3f})</div>')
+                else: assump_report.append(f'<div class="assumption-fail">⚠️ 잔차 정규성 위배 (p={p_norm:.3f})</div>')
+            
+            grps = [sub_df[sub_df[g]==k][y] for k in sub_df[g].unique()]
+            _, p_levene = stats.levene(*grps)
+            if p_levene > 0.05: assump_report.append(f'<div class="assumption-pass">✅ 등분산성 충족 (p={p_levene:.3f})</div>')
+            else: assump_report.append(f'<div class="assumption-fail">⚠️ 등분산성 위배 (p={p_levene:.3f})</div>')
+
+            # 결과 정리
             eta = model.rsquared; es_eval = "Large" if eta > 0.14 else "Medium" if eta > 0.06 else "Small"
             anova_info = f"- **Effect Size (η²):** {eta:.3f} ({es_eval})"
-            extra_metric_text = anova_info.replace("**", "")
+            
             final_df = res.reset_index().rename(columns={'index':'Source (변동원)', 'PR(>F)':'p (유의확률)'}).round(3)
+            
+            # Writing Guide (Scaffolded)
+            df1, df2 = int(res.iloc[0,1]), int(res.iloc[1,1]); f_val = res.iloc[0,2]
+            sig_txt = "통계적으로 유의한 차이가 있었습니다" if p_val < 0.05 else "통계적으로 유의한 차이가 없었습니다"
+            interp = (f"📌 **[ANOVA 해석 가이드]**<br>"
+                      f"일원배치 분산분석 결과, 집단 간 **{y}**의 평균은 **{sig_txt}** "
+                      f"(F({df1}, {df2}) = {f_val:.3f}, p {format_p(p_val)}). "
+                      f"효과 크기(η²)는 {eta:.3f}로 **{es_eval}** 수준입니다.")
+            
             if p_val < 0.05:
-                tukey = pairwise_tukeyhsd(df[y].dropna(), df[g].dropna()); st.info("💡 사후검정(Tukey) 결과"); st.text(str(tukey))
-            interp = f"📌 집단 간 평균 차이가 통계적으로 {'유의합니다' if p_val < 0.05 else '유의하지 않습니다'} (p={format_p(p_val)})."
+                tukey = pairwise_tukeyhsd(sub_df[y], sub_df[g]); st.info("💡 사후검정(Tukey) 결과"); st.text(str(tukey))
 
     elif method == "상관분석":
         vs = st.multiselect("분석할 변수군 선택 (연속형)", num_cols)
@@ -371,14 +389,15 @@ if up_file:
             p_m = pd.DataFrame([[format_p(stats.pearsonr(df[i].dropna(), df[j].dropna())[1]) if i!=j else "-" for j in vs] for i in vs], index=vs, columns=vs)
             final_df = corr_m.astype(str) + " (p=" + p_m.astype(str) + ")"
             plt.figure(figsize=(6,5)); sns.heatmap(corr_m, annot=True, cmap="coolwarm"); plot_img = get_plot_buffer()
-            interp = "📌 피어슨 상관계수(r)와 유의확률(p) 행렬입니다."
+            interp = "📌 **[상관분석 해석]**<br>상관계수(r)가 0.7 이상이면 강한 양의 상관, -0.7 이하이면 강한 음의 상관관계가 있다고 해석합니다. p < .05 인 경우 해당 관계는 통계적으로 유의합니다."
 
     elif method == "신뢰도 분석":
         vs = st.multiselect("신뢰도 분석할 문항군 선택 (연속형)", num_cols)
         if st.button("통계 분석 실행") and len(vs)>=2:
             it = df[vs].dropna(); k = it.shape[1]; alpha = (k/(k-1)) * (1 - (it.var(ddof=1).sum() / it.sum(axis=1).var(ddof=1)))
             final_df = pd.DataFrame({"Cronbach α (계수)": [f"{alpha:.3f}"]})
-            interp = f"📌 크론바흐 알파 계수는 {alpha:.3f}입니다."
+            rel_txt = "매우 양호" if alpha > 0.8 else "양호" if alpha > 0.7 else "부족"
+            interp = f"📌 **[신뢰도 해석]**<br>Cronbach's α 계수는 **{alpha:.3f}**로, 도구의 신뢰도는 **'{rel_txt}'**한 수준입니다."
 
     elif method == "회귀분석":
         rtype = st.radio("회귀 유형", ["선형 회귀분석 (Linear)", "로지스틱 회귀분석 (Logistic)"])
@@ -389,13 +408,13 @@ if up_file:
                 model = sm.OLS(reg_d[y], X).fit(); p_val = model.f_pvalue
                 beta = model.params[1:] * (reg_d[xs].std() / reg_d[y].std())
                 conf = model.conf_int(); conf.columns = ['Lower', 'Upper']
+                
                 vifs = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
                 if max(vifs[1:]) < 10: assump_report.append(f'<div class="assumption-pass">✅ 다중공선성 없음 (Max VIF={max(vifs[1:]):.2f})</div>')
                 else: assump_report.append(f'<div class="assumption-fail">⚠️ 다중공선성 경고 (Max VIF={max(vifs[1:]):.2f})</div>')
                 dw = durbin_watson(model.resid)
                 assump_report.append(f'<div class="{"assumption-pass" if 1.5<dw<2.5 else "assumption-fail"}">✅ 잔차 독립성 (DW={dw:.2f})</div>')
                 
-                # 종속변수 명시
                 st.info(f"🎯 분석 대상 종속변수(Dependent Variable): {y}")
                 final_df = pd.DataFrame({
                     "Predictor (독립변수)": ["(Constant)"] + list(xs), "B (비표준화 계수)": model.params.values,
@@ -408,13 +427,13 @@ if up_file:
                     plt.figure(figsize=(6,5)); sns.regplot(x=reg_d[xs[0]], y=reg_d[y], line_kws={"color":"red"}); plot_img = get_plot_buffer()
                 else:
                     plt.figure(figsize=(6,5)); plt.scatter(model.fittedvalues, model.resid); plt.title("Residual vs Fitted"); plot_img = get_plot_buffer()
-                interp = f"📌 회귀모형은 통계적으로 {'유의합니다' if p_val < 0.05 else '유의하지 않습니다'} (R²={model.rsquared:.3f})."
+                
+                sig_txt = "유의하게 설명하고 있습니다" if p_val < 0.05 else "유의하게 설명하지 못하고 있습니다"
+                interp = f"📌 **[회귀분석 해석]**<br>회귀모형은 종속변수({y})를 통계적으로 **{sig_txt}** (F={model.fvalue:.3f}, p{format_p(p_val)}). 모델의 설명력(R²)은 **{model.rsquared:.3f}**입니다."
             else:
-                # 로지스틱 데이터 타입 체크
                 if reg_d[y].dtype == 'object':
                     from sklearn.preprocessing import LabelEncoder
-                    le = LabelEncoder()
-                    reg_d[y] = le.fit_transform(reg_d[y])
+                    le = LabelEncoder(); reg_d[y] = le.fit_transform(reg_d[y])
                     st.warning(f"ℹ️ 종속변수 '{y}'가 텍스트여서 0과 1로 변환했습니다.")
 
                 model = sm.Logit(reg_d[y], X).fit(disp=False); p_val = model.llr_pvalue
@@ -422,7 +441,7 @@ if up_file:
                     "Predictor (독립변수)": model.params.index, "B (Coeff)": model.params.values, 
                     "OR (Odds Ratio)": np.exp(model.params.values), "p (Sig)": model.pvalues.apply(format_p).values
                 }).round(3).reset_index(drop=True)
-                interp = f"📌 로지스틱 모형 유의성 p={format_p(p_val)}."
+                interp = f"📌 **[로지스틱 회귀 해석]**<br>모형의 유의확률은 **p{format_p(p_val)}**입니다. OR(오즈비)이 1보다 크면 해당 변수가 증가할수록 사건 발생 확률이 높아짐을 의미합니다."
 
     # --- Step 03: 결과 대시보드 ---
     if final_df is not None:
@@ -453,7 +472,7 @@ if up_file:
             </div>
             """, unsafe_allow_html=True)
             
-            if extra_metric_text:
+            if extra_metric_text and "분산분석" not in method:
                 st.markdown(f"""
                 <div style="background-color: #f0fdfa; padding: 15px; border-radius: 10px; border: 1px solid #ccfbf1; margin-top: 10px;">
                     <div style="font-size: 0.9rem; color: #0f766e; font-weight: 700;">📌 {extra_metric_text}</div>
